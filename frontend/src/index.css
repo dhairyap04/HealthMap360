@@ -1106,3 +1106,8 @@ td {
     padding: 8px 10px;
   }
 }
+
+.badge.unreported {
+  color: #72867b;
+  background: #eef3ef;
+}

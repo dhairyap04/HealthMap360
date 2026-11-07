@@ -90,7 +90,7 @@ The column mapper supports different source headers. Files must be UTF-8, at mos
 
 Repeated keys with identical count, severity and source are skipped. Changed values on an existing key are rejected; use **Edit** to make an explicit correction. Import history records successful batches, including batches consisting only of duplicates. It is not a complete edit/delete audit log.
 
-Dashboard filters apply to observations and map markers. Resource units reflect current inventory, restricted by the location filter only; disease, date and severity filters do not change inventory. The map's severity is the highest reported severity in the selected observations. Missing reporting days are not treated as zero. Exports include all matched observations, beyond the displayed page, and neutralize spreadsheet formula prefixes in text fields.
+Dashboard filters apply to observations and map markers. Resource units reflect current inventory, restricted by the location filter only; disease, date and severity filters do not change inventory. The map shows all saved locations, including newly added places with no observations. Those places use neutral dashed markers and have no inferred case count or severity. Observation filters change the report overlay while the location filter restricts which saved places appear. The map's severity is the highest reported severity in the selected observations. Missing reporting days are not treated as zero. Exports include all matched observations, beyond the displayed page, and neutralize spreadsheet formula prefixes in text fields.
 
 ## Place search
 

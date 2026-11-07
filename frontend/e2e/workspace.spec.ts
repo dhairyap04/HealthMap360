@@ -41,7 +41,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   ).toHaveText('93')
   await page.screenshot({ path: 'test-results/dashboard-desktop.png', fullPage: true })
   await page.getByRole('link', { name: 'Outbreak map' }).click()
-  await expect(page.getByRole('heading', { name: '3 affected locations' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '3 saved locations' })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(3)
   await page.getByRole('link', { name: 'Resources', exact: true }).click()
   await page.getByRole('button', { name: 'Add resource' }).click()
@@ -83,6 +83,28 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Display name', { exact: true }).fill('Lethbridge')
   await page.getByRole('button', { name: 'Save location' }).click()
   await expect(page.getByRole('cell', { name: 'Lethbridge', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Outbreak map' }).click()
+  await expect(page.getByRole('heading', { name: '4 saved locations' })).toBeVisible()
+  await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
+  await expect(
+    page.locator('.location-list > div').filter({ hasText: 'Lethbridge' }),
+  ).toContainText('No reports yet')
+  await page.locator('.leaflet-overlay-pane path[stroke="#839b90"]').click()
+  await expect(page.locator('.leaflet-popup')).toContainText('Lethbridge')
+  await expect(page.locator('.leaflet-popup')).toContainText('No outbreak reports have been added')
+  await page.getByRole('combobox', { name: 'Location', exact: true }).click()
+  await page.getByRole('option', { name: 'Lethbridge', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '1 saved location', exact: true })).toBeVisible()
+  await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(1)
+  await page.getByRole('combobox', { name: 'Severity', exact: true }).click()
+  await page.getByRole('option', { name: 'Critical', exact: true }).click()
+  await expect(
+    page.locator('.location-list > div').filter({ hasText: 'Lethbridge' }),
+  ).toContainText('No reports in view')
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '4 saved locations' })).toBeVisible()
+  await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
+
   await page.getByRole('link', { name: 'Reports & data' }).click()
   await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
   await page.getByLabel('Daily case count').fill('5')
