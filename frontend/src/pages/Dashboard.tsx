@@ -1,10 +1,142 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  BarChart,
+  Bar,
+} from 'recharts'
+import Filters from '../components/Filters'
+import LoadState from '../components/LoadState'
+import { query } from '../lib/api'
+import { emptyFilters } from '../lib/types'
+import type { Summary } from '../lib/types'
+import { useApi } from '../lib/useApi'
+
 export default function Dashboard() {
+  const [filters, setFilters] = useState({ ...emptyFilters })
+  const { data, loading, error, reload } = useApi<Summary>(`/summary${query(filters)}`)
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold text-medicalBlue">Dashboard</h1>
-      <p className="mt-2 text-neutralGray-900">Overview of outbreaks and resources.</p>
-    </div>
-  );
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">SITUATION OVERVIEW</p>
+          <h1>Public health, in focus.</h1>
+          <p className="muted">Monitor reported cases and coordinate your response.</p>
+        </div>
+        <Link className="button primary" to="/reports">
+          View reports ↗
+        </Link>
+      </div>
+      <Filters value={filters} onChange={setFilters} />
+      <LoadState loading={loading} error={error} retry={reload} />
+      {data && (
+        <>
+          <div className="stats-grid">
+            {[
+              ['Reported cases', data.total_cases, 'Sum within selected filters'],
+              ['Affected locations', data.affected_locations, 'Locations with observations'],
+              ['Diseases tracked', data.diseases, 'Distinct diseases in view'],
+              ['Resource units', data.resource_units, 'Current stock; location filter only'],
+            ].map(([label, value, note]) => (
+              <section className="stat" key={label}>
+                <p>{label}</p>
+                <strong>{Number(value).toLocaleString()}</strong>
+                <small>{note}</small>
+              </section>
+            ))}
+          </div>
+          {data.observations === 0 ? (
+            <div className="panel empty">
+              <h2>No observations in this view</h2>
+              <p>Adjust your filters or import a CSV to begin.</p>
+              <Link className="button" to="/reports">
+                Go to reports
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="chart-grid">
+                <section className="panel">
+                  <div className="panel-heading">
+                    <h2>Reported cases over time</h2>
+                    <span className="muted">{data.observations.toLocaleString()} observations</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={data.trend}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis allowDecimals={false} width={45} />
+                      <Tooltip />
+                      <Line
+                        isAnimationActive={false}
+                        type="linear"
+                        dataKey="cases"
+                        stroke="#087f78"
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <small className="muted">
+                    Only dates with reports appear. Missing dates do not imply zero cases.
+                  </small>
+                </section>
+                <section className="panel">
+                  <h2>Cases by disease</h2>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={data.by_disease}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="disease" tick={{ fontSize: 11 }} />
+                      <YAxis allowDecimals={false} width={40} />
+                      <Tooltip />
+                      <Bar
+                        isAnimationActive={false}
+                        dataKey="cases"
+                        fill="#41a99c"
+                        radius={[5, 5, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </section>
+              </div>
+              <section className="panel">
+                <div className="panel-heading">
+                  <h2>Locations at a glance</h2>
+                  <Link to="/map">Explore map →</Link>
+                </div>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Location</th>
+                        <th>Reported cases</th>
+                        <th>Highest reported severity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.locations.map((l) => (
+                        <tr key={l.id}>
+                          <td>{l.name}</td>
+                          <td>{l.cases.toLocaleString()}</td>
+                          <td>
+                            <span className={`badge ${l.severity}`}>{l.severity}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )}
+        </>
+      )}
+    </>
+  )
 }
-
-

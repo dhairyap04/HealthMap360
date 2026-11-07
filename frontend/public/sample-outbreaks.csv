@@ -1,0 +1,9 @@
+date,location,disease,case_count,severity,source,latitude,longitude
+2026-11-01,Edmonton,influenza,14,medium,Demonstration data,53.5461,-113.4938
+2026-11-02,Edmonton,influenza,21,high,Demonstration data,53.5461,-113.4938
+2026-11-03,Edmonton,influenza,18,high,Demonstration data,53.5461,-113.4938
+2026-11-01,Calgary,influenza,9,low,Demonstration data,51.0447,-114.0719
+2026-11-02,Calgary,influenza,16,medium,Demonstration data,51.0447,-114.0719
+2026-11-03,Calgary,covid-19,11,medium,Demonstration data,51.0447,-114.0719
+2026-11-02,Red Deer,influenza,4,low,Demonstration data,52.2681,-113.8112
+2026-11-03,Red Deer,influenza,0,low,Demonstration data,52.2681,-113.8112

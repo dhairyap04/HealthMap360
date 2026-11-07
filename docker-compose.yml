@@ -1,41 +1,53 @@
-version: "3.9"
 services:
   db:
     image: postgis/postgis:15-3.3
     environment:
       POSTGRES_DB: healthmap360
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d healthmap360"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   backend:
     build: .
-    env_file:
-      - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/healthmap360
+      DATABASE_URL: postgresql+psycopg://postgres@db:5432/healthmap360
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      GEOCODING_URL: ${GEOCODING_URL:-https://nominatim.openstreetmap.org/search}
+      GEOCODING_USER_AGENT: ${GEOCODING_USER_AGENT:-HealthMap360/0.1 (interactive public health location search)}
+      SECRET_KEY: ${SECRET_KEY:-}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:5173","http://127.0.0.1:5173"]}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   frontend:
-    image: node:20-alpine
+    image: node:22-alpine
     working_dir: /app
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      API_PROXY_TARGET: http://backend:8000
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./frontend:/app
+      - frontend_modules:/app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 volumes:
   db_data:
+  frontend_modules:
