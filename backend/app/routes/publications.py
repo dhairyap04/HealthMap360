@@ -43,6 +43,8 @@ class Draft(BaseModel):
             for value in (self.title, self.public_name, self.summary, self.methodology, self.source_name)
         ):
             raise ValueError("Public text must not be blank")
+        if self.source_url.scheme != "https" or self.source_url.username or self.source_url.password:
+            raise ValueError("Use an HTTPS source URL without embedded credentials")
         if len(str(self.source_url)) > 500:
             raise ValueError("Source URL must be at most 500 characters")
         return self
@@ -256,3 +258,11 @@ def public_report(publication_id: int, db: Session = Depends(get_db)):
     if not row or row.status != "published":
         raise HTTPException(404, "Published report not found")
     return public_json(row)
+
+
+@public.get("/config")
+def reporting_clock():
+    return {
+        "today": date.today(),
+        "note": "Date inputs use the workspace reporting day, independently of browser UTC conversion.",
+    }

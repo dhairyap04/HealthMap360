@@ -1,3 +1,4 @@
+import { useWorkspaceDate } from '../lib/workspaceDate'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -290,6 +291,7 @@ type ImportPreview = {
 }
 function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void }) {
   const [preview, setPreview] = useState<{ key: string; data: ImportPreview } | null>(null)
+  const today = useWorkspaceDate()
   const catalog = useApi<FeedCatalog>(feed ? null : '/feeds/catalog')
   const locations = useApi<Location[]>('/locations')
   const [busy, setBusy] = useState(false)
@@ -298,7 +300,7 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
     locations.data?.filter(
       (location) => location.administrative_level?.toLowerCase() === 'country',
     ) || []
-  const since = new Date()
+  const since = new Date(`${today}T12:00:00Z`)
   since.setUTCDate(since.getUTCDate() - 90)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -404,7 +406,7 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
             name="start_date"
             type="date"
             min="2020-01-01"
-            max={new Date().toISOString().slice(0, 10)}
+            max={today}
             required
             defaultValue={feed?.start_date || since.toISOString().slice(0, 10)}
           />

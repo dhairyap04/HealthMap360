@@ -1540,3 +1540,25 @@ td > small {
   background: #edf3ef;
   overflow-wrap: anywhere;
 }
+.public-map {
+  height: 300px;
+  width: 100%;
+  margin: 12px 0;
+  border-radius: 10px;
+}
+@media (min-width: 701px) {
+  .sidebar {
+    overflow-y: auto;
+  }
+  .sidebar nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  .sidebar > .brand,
+  .sidebar > .nav-label,
+  .sidebar-bottom {
+    flex-shrink: 0;
+  }
+}

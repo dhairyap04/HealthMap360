@@ -45,8 +45,27 @@ def backup(url, output):
             with sqlite3.connect(url.database) as source, sqlite3.connect(output) as target:
                 source.backup(target)
         else:
+            from app.models.base import Base
+
+            engine = create_engine(url)
+            try:
+                names = set(inspect(engine).get_table_names(schema="public")) & (
+                    set(Base.metadata.tables) | {"alembic_version"}
+                )
+            finally:
+                engine.dispose()
+            if not names:
+                raise RuntimeError("No application tables found in the public schema")
             subprocess.run(
-                ["pg_dump", "--format=custom", "--no-owner", "--no-acl", "--file", str(output)],
+                [
+                    "pg_dump",
+                    "--format=custom",
+                    "--no-owner",
+                    "--no-acl",
+                    "--file",
+                    str(output),
+                    *["--table=public." + name for name in sorted(names)],
+                ],
                 env=pg_environment(url),
                 check=True,
             )

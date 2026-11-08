@@ -1,3 +1,4 @@
+import { useWorkspaceDate } from '../lib/workspaceDate'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -10,6 +11,7 @@ import type { PublishedReport } from './PublicPortal'
 import LoadState from '../components/LoadState'
 type Draft = { id: number; status: string; payload: PublishedReport; created_at: string }
 export default function Publications() {
+  const today = useWorkspaceDate()
   const { user } = useAuth()
   const drafts = useApi<Draft[]>('/publications')
   const locations = useApi<Location[]>('/locations')
@@ -133,12 +135,7 @@ export default function Publications() {
             </label>
             <label>
               Last report date
-              <input
-                name="date_to"
-                type="date"
-                required
-                max={new Date().toISOString().slice(0, 10)}
-              />
+              <input name="date_to" type="date" required max={today} />
             </label>
           </div>
           <label>

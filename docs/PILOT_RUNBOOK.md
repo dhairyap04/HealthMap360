@@ -115,7 +115,7 @@ Run backups using a restricted directory and scheduled operator job:
 PYTHONPATH=backend backend/.venv/bin/python -m app.operations backup --file /secure/backups/healthmap-YYYYMMDD.backup
 ```
 
-SQLite uses its online backup API; PostgreSQL uses pg_dump custom format with
+SQLite uses its online backup API; PostgreSQL dumps the managed public-schema application tables plus alembic_version in pg_dump custom format. Unused PostGIS extension objects and unrelated tables are deliberately excluded, so restores do not require extension/superuser privileges. This is an application backup, not a full cluster/custom-schema backup. It uses
 credentials passed through the process environment, not arguments. Backup files
 are created mode 0600 and accompanied by a SHA-256 checksum. For PostgreSQL install
 matching PostgreSQL client tools. Production encryption-at-rest and off-host backup
@@ -155,3 +155,8 @@ source approval is a deliberate action. Regional integration remains subject to
 REGIONAL_SOURCES.md. Population rates, typed laboratory/wastewater metrics, personal
 subscriptions and external notifications are future work rather than simulated
 features. No clinical validation or regulatory compliance is claimed.
+
+An operator-installable daily backup script and crontab example are in
+`deploy/scheduled-backup.sh` and `deploy/backup.cron.example`. They are not installed
+on the user's computer. Configure restricted environment storage, off-host copying,
+retention and failure monitoring on the actual hosting system before public use.

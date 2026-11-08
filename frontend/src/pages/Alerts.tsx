@@ -1,3 +1,4 @@
+import { useWorkspaceDate } from '../lib/workspaceDate'
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -11,6 +12,7 @@ import type { Location } from '../lib/types'
 import { useApi } from '../lib/useApi'
 
 export default function Alerts() {
+  const today = useWorkspaceDate()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [evidenceId, setEvidenceId] = useState<number | null>(null)
@@ -27,7 +29,7 @@ export default function Alerts() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10))
+  const [asOf, setAsOf] = useState('')
   useEffect(() => {
     const timer = setInterval(alerts.reload, 60000)
     return () => clearInterval(timer)
@@ -94,14 +96,14 @@ export default function Alerts() {
     setError('')
     try {
       const result = await api<{ created: number; historical: boolean }>(
-        `/alerts/evaluate${query({ as_of: asOf })}`,
+        `/alerts/evaluate${query({ as_of: asOf || today })}`,
         {
           method: 'POST',
         },
       )
       alerts.reload()
       setHistorical(result.historical)
-      setStatus(`Evaluation complete for ${asOf}: ${result.created} new alerts.`)
+      setStatus(`Evaluation complete for ${asOf || today}: ${result.created} new alerts.`)
     } catch (error) {
       setError(errorMessage(error))
     } finally {
@@ -165,8 +167,8 @@ export default function Alerts() {
               Evaluate through
               <input
                 type="date"
-                value={asOf}
-                max={new Date().toISOString().slice(0, 10)}
+                value={asOf || today}
+                max={today}
                 onChange={(e) => setAsOf(e.target.value)}
               />
             </label>

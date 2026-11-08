@@ -1,0 +1,6 @@
+# Example for an operator-managed Linux crontab; not installed automatically.
+# /etc/healthmap/backup.env must be owned by the operator and mode 0600.
+# Set HEALTHMAP_REPOSITORY, HEALTHMAP_PYTHON, HEALTHMAP_BACKUP_DIRECTORY,
+# DATABASE_URL and SECRET_KEY there. Configure matching PostgreSQL client tools.
+# Forward nonzero exits and missing backup timestamps to your actual monitor.
+0 2 * * * /opt/healthmap/deploy/scheduled-backup.sh /etc/healthmap/backup.env

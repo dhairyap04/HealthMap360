@@ -69,6 +69,7 @@ def draft_payload(location):
         "/alerts/1/evaluations",
         "/publications",
         "/publications/1/history",
+        "/data-health",
     ],
 )
 def test_public_cannot_read_any_analyst_endpoint(client, auth, path):
@@ -431,3 +432,14 @@ def test_large_series_remains_paginated_and_summary_queries_are_bounded(client, 
         event.remove(database, "before_cursor_execute", record_query)
     page = client.get("/cases?page_size=50", headers=auth["analyst"]).json()
     assert page["total"] == 5000 and len(page["items"]) == 50
+
+
+def test_workspace_day_and_publication_source_urls(client, auth):
+    assert client.get("/public/config").json()["today"] == str(date.today())
+    area = place(client, auth)
+    observation(client, auth, area)
+    for url in ("https://user:password@example.com/source", "http://example.com/source", "javascript:alert(1)"):
+        response = client.post(
+            "/publications", headers=auth["analyst"], json={**draft_payload(area), "source_url": url}
+        )
+        assert response.status_code == 422

@@ -534,6 +534,7 @@ test('geography views isolate totals and show historical national boundaries', a
 })
 
 test('publication review controls anonymous access and withdrawal', async ({ page }) => {
+  await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
   await page.goto('/')
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
@@ -566,6 +567,8 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
   await page.getByRole('checkbox', { name: /I reviewed the source/ }).check()
   await page.getByRole('button', { name: 'Publish reviewed snapshot' }).click()
   await expect(page.locator('p.success')).toContainText('Snapshot published')
+  await page.setViewportSize({ width: 1280, height: 600 })
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeInViewport()
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await page.getByRole('link', { name: /View published reports without signing in/ }).click()
   await expect(
@@ -574,6 +577,9 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
   await expect(page.locator('article strong').filter({ hasText: '3,189,913' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Investigations', exact: true })).toHaveCount(0)
   expect((await page.request.get('/api/outbreaks/1')).status()).toBe(401)
+  await page.getByRole('button', { name: 'Show map and timeline', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Published reporting evidence' })).toBeVisible()
+  await expect(page.locator('.public-map .leaflet-overlay-pane path')).toHaveCount(1)
   await page.getByRole('link', { name: 'Canada →', exact: true }).click()
   await expect(page).toHaveURL(/public\/locations\//)
   await page.setViewportSize({ width: 390, height: 844 })

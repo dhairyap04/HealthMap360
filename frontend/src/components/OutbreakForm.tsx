@@ -1,3 +1,4 @@
+import { useWorkspaceDate } from '../lib/workspaceDate'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/context'
@@ -13,6 +14,7 @@ export default function OutbreakForm({
   outbreak?: Outbreak
   saved: (id: number) => void
 }) {
+  const today = useWorkspaceDate()
   const { user } = useAuth()
   const locations = useApi<Location[]>('/locations')
   const owners = useApi<{ id: number; username: string }[]>('/outbreaks/owners')
@@ -90,7 +92,8 @@ export default function OutbreakForm({
             name="started_on"
             type="date"
             required
-            defaultValue={outbreak?.started_on || new Date().toISOString().slice(0, 10)}
+            key={today}
+            defaultValue={outbreak?.started_on || today}
           />
         </label>
         <label>

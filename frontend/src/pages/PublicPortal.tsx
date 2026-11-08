@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
+const PublishedEvidence = lazy(() => import('../components/PublishedEvidence'))
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 import { api, errorMessage, query } from '../lib/api'
@@ -12,7 +13,13 @@ export type PublishedReport = {
   methodology: string
   source_name: string
   source_url: string
-  location: { id: number; name: string; geographic_scope: string }
+  location: {
+    id: number
+    name: string
+    geographic_scope: string
+    country_code: string | null
+    region_code: string | null
+  }
   disease: string
   date_from: string
   date_to: string
@@ -32,6 +39,7 @@ export default function PublicPortal() {
   const [params, setParams] = useSearchParams()
   const [error, setError] = useState('')
   const [account, setAccount] = useState(false)
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   const reports = useApi<{ items: PublishedReport[]; has_more: boolean; page: number }>(
     `/public/reports${query({ location_id: locationId, disease: params.get('disease'), page: params.get('page') || 1 })}`,
   )
@@ -188,6 +196,17 @@ export default function PublicPortal() {
                   Counts below {report.suppression_threshold} and reconstructable totals are
                   withheld for privacy.
                 </p>
+              )}
+              <button
+                aria-expanded={expanded[report.id] || false}
+                onClick={() => setExpanded({ ...expanded, [report.id]: !expanded[report.id] })}
+              >
+                {expanded[report.id] ? 'Hide map and timeline' : 'Show map and timeline'}
+              </button>
+              {expanded[report.id] && (
+                <Suspense fallback={<p>Loading reporting evidence…</p>}>
+                  <PublishedEvidence report={report} />
+                </Suspense>
               )}
               <details>
                 <summary>Reporting timeline and methodology</summary>
