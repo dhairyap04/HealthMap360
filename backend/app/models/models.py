@@ -1,4 +1,18 @@
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -27,6 +41,7 @@ class Case(Base):
     __table_args__ = (
         UniqueConstraint("location_id", "date", "disease", name="uq_case_observation"),
         CheckConstraint("case_count >= 0", name="case_count_nonnegative"),
+        CheckConstraint("reporting_period_days IN (1, 7)", name="case_reporting_period"),
         CheckConstraint("severity IN ('low', 'medium', 'high', 'critical')", name="case_severity"),
     )
     id = Column(Integer, primary_key=True)
@@ -36,6 +51,9 @@ class Case(Base):
     case_count = Column(Integer, nullable=False)
     severity = Column(String(20), nullable=False)
     source = Column(String(300))
+    reporting_period_days = Column(Integer, nullable=False, default=1, server_default="1")
+    outbreak_id = Column(Integer, ForeignKey("outbreaks.id", ondelete="SET NULL"), index=True)
+    feed_id = Column(Integer, ForeignKey("feeds.id", ondelete="SET NULL"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     location = relationship("Location", back_populates="cases")
 
@@ -72,3 +90,133 @@ class ImportBatch(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user = relationship("User")
+
+
+outbreak_locations = Table(
+    "outbreak_locations",
+    Base.metadata,
+    Column("outbreak_id", Integer, ForeignKey("outbreaks.id", ondelete="CASCADE"), primary_key=True),
+    Column("location_id", Integer, ForeignKey("locations.id"), primary_key=True),
+)
+
+
+class Outbreak(Base):
+    __tablename__ = "outbreaks"
+    __table_args__ = (
+        CheckConstraint("status IN ('investigating','active','contained','closed')", name="outbreak_status"),
+        CheckConstraint("priority IN ('low','medium','high','critical')", name="outbreak_priority"),
+        CheckConstraint("ended_on IS NULL OR ended_on >= started_on", name="outbreak_dates"),
+    )
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    disease = Column(String(120), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="investigating")
+    priority = Column(String(20), nullable=False, default="medium")
+    started_on = Column(Date, nullable=False)
+    ended_on = Column(Date)
+    description = Column(Text, nullable=False, default="")
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    locations = relationship("Location", secondary=outbreak_locations)
+    owner = relationship("User")
+
+
+class OutbreakUpdate(Base):
+    __tablename__ = "outbreak_updates"
+    id = Column(Integer, primary_key=True)
+    outbreak_id = Column(Integer, ForeignKey("outbreaks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=False)
+    kind = Column(String(30), nullable=False, default="note")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    user = relationship("User")
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+    __table_args__ = (
+        CheckConstraint("threshold >= 1", name="alert_threshold"),
+        CheckConstraint("window_days BETWEEN 1 AND 90", name="alert_window"),
+        CheckConstraint("severity IN ('low','medium','high','critical')", name="alert_severity"),
+    )
+    id = Column(Integer, primary_key=True)
+    name = Column(String(160), nullable=False)
+    disease = Column(String(120))
+    location_id = Column(Integer, ForeignKey("locations.id"))
+    threshold = Column(Integer, nullable=False)
+    window_days = Column(Integer, nullable=False, default=7)
+    severity = Column(String(20), nullable=False, default="medium")
+    enabled = Column(Boolean, nullable=False, default=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    location = relationship("Location")
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (
+        UniqueConstraint("rule_id", "location_id", "disease", "window_end", name="uq_alert_evaluation"),
+        CheckConstraint("status IN ('open','acknowledged','resolved')", name="alert_status"),
+    )
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey("alert_rules.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
+    disease = Column(String(120), nullable=False)
+    rule_name = Column(String(160), nullable=False)
+    severity = Column(String(20), nullable=False)
+    value = Column(Integer, nullable=False)
+    threshold = Column(Integer, nullable=False)
+    window_start = Column(Date, nullable=False)
+    window_end = Column(Date, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="open")
+    resolution = Column(String(300))
+    acknowledged_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    location = relationship("Location")
+
+
+class Feed(Base):
+    __tablename__ = "feeds"
+    __table_args__ = (UniqueConstraint("provider", "country_code", name="uq_feed_country"),)
+    id = Column(Integer, primary_key=True)
+    name = Column(String(160), nullable=False)
+    provider = Column(String(40), nullable=False)
+    country_code = Column(String(2), nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
+    severity = Column(String(20), nullable=False, default="low")
+    start_date = Column(Date, nullable=False)
+    interval_minutes = Column(Integer, nullable=False, default=1440)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    next_sync_at = Column(DateTime(timezone=True))
+    lease_until = Column(DateTime(timezone=True))
+    last_synced_at = Column(DateTime(timezone=True))
+    last_error = Column(String(600))
+    location = relationship("Location")
+
+
+class FeedRun(Base):
+    __tablename__ = "feed_runs"
+    id = Column(Integer, primary_key=True)
+    feed_id = Column(Integer, ForeignKey("feeds.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False)
+    imported = Column(Integer, nullable=False, default=0)
+    updated = Column(Integer, nullable=False, default=0)
+    skipped = Column(Integer, nullable=False, default=0)
+    latest_report_date = Column(Date)
+    message = Column(String(1000), nullable=False, default="")
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    finished_at = Column(DateTime(timezone=True))
+
+
+class CaseRevision(Base):
+    __tablename__ = "case_revisions"
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("cases.id", ondelete="SET NULL"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    feed_id = Column(Integer, ForeignKey("feeds.id"))
+    action = Column(String(30), nullable=False)
+    before = Column(JSON)
+    after = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

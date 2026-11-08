@@ -35,6 +35,7 @@ class CaseInput(BaseModel):
     case_count: int = Field(ge=0, le=2147483647)
     severity: Severity
     source: str | None = Field(default=None, max_length=300)
+    reporting_period_days: Literal[1, 7] = 1
 
     @field_validator("disease")
     @classmethod
@@ -49,6 +50,8 @@ class CaseOut(CaseInput):
     model_config = ConfigDict(from_attributes=True)
     id: int
     location: LocationOut
+    outbreak_id: int | None = None
+    feed_id: int | None = None
 
 
 class ResourceInput(BaseModel):

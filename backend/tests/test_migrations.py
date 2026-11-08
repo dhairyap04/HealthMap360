@@ -39,7 +39,7 @@ def test_legacy_schema_adoption_preserves_records_and_is_repeatable(tmp_path, mo
         assert connection.execute(text("SELECT case_count FROM cases")).scalar() == 10
         assert connection.execute(text("SELECT hashed_password FROM users")).scalar() == "preserved-hash"
         assert connection.execute(text("SELECT username FROM users")).scalar() == "legacy"
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"
     engine.dispose()
 
 

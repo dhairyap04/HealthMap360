@@ -15,10 +15,12 @@ from app.db.session import get_db
 from app.models.models import Case, ImportBatch, Location, User
 from app.routes.data import normalize_name
 from app.schemas.health import CaseInput, LocationInput
+from app.services.alerts import evaluate_alerts
+from app.services.surveillance import revision
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 REQUIRED = ("date", "location", "disease", "case_count", "severity")
-OPTIONAL = ("source", "latitude", "longitude")
+OPTIONAL = ("source", "latitude", "longitude", "reporting_period_days")
 
 
 @router.get("")
@@ -134,15 +136,22 @@ def import_csv(
                     case_count=int(count),
                     severity=get("severity").lower(),
                     source=get("source") or None,
+                    reporting_period_days=get("reporting_period_days") or 1,
                 )
                 identity = (key, observation.date, observation.disease)
                 previous = observations.get(identity)
                 comparison = previous
                 if comparison:
-                    if (comparison.case_count, comparison.severity, comparison.source or None) != (
+                    if (
+                        comparison.case_count,
+                        comparison.severity,
+                        comparison.source or None,
+                        comparison.reporting_period_days,
+                    ) != (
                         observation.case_count,
                         observation.severity,
                         observation.source,
+                        observation.reporting_period_days,
                     ):
                         raise ValueError(
                             "Conflicting observation for this location, date and disease; edit the existing record"
@@ -175,10 +184,11 @@ def import_csv(
             key, day, disease = identity
             stored = existing.get((locations[key].id, day, disease)) if key in locations else None
             if stored:
-                if (stored.case_count, stored.severity, stored.source or None) == (
+                if (stored.case_count, stored.severity, stored.source or None, stored.reporting_period_days) == (
                     observation.case_count,
                     observation.severity,
                     observation.source,
+                    observation.reporting_period_days,
                 ):
                     duplicates += 1
                     del observations[identity]
@@ -206,11 +216,15 @@ def import_csv(
             locations[key] = location
         db.flush()
         for (key, _, _), observation in observations.items():
-            db.add(Case(**{**observation.model_dump(), "location_id": locations[key].id}))
+            record = Case(**{**observation.model_dump(), "location_id": locations[key].id})
+            db.add(record)
+            db.flush()
+            revision(db, record, None, "import", user_id=user.id)
         batch = ImportBatch(
             filename=Path(file.filename).name[:255], imported=len(observations), skipped=duplicates, user_id=user.id
         )
         db.add(batch)
+        evaluate_alerts(db)
         db.commit()
         return {"id": batch.id, "imported": batch.imported, "skipped": batch.skipped, "total": row_count}
     except (UnicodeDecodeError, csv.Error, json.JSONDecodeError):
