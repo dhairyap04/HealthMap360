@@ -206,7 +206,13 @@ def case_history(case_id: int, db: Session = Depends(get_db)):
         }
         for row in db.scalars(
             select(CaseRevision)
-            .where(or_(CaseRevision.case_id == case_id, CaseRevision.before["id"].as_integer() == case_id))
+            .where(
+                or_(
+                    CaseRevision.case_id == case_id,
+                    CaseRevision.before["id"].as_integer() == case_id,
+                    CaseRevision.after["id"].as_integer() == case_id,
+                )
+            )
             .order_by(CaseRevision.id.desc())
             .limit(100)
         )

@@ -163,3 +163,23 @@ def test_alert_window_boundaries_pause_and_count_corrections(client, auth):
     assert client.put(f"/alert-rules/{rule_id}", headers=headers, json={**rule, "enabled": False}).status_code == 200
     assert client.post("/alerts/evaluate", headers=headers).json()["evaluated_rules"] == 0
     assert client.post("/alert-rules", headers=auth["reader"], json=rule).status_code == 403
+
+
+def test_deleted_observation_keeps_its_complete_history(client, auth):
+    city = client.post(
+        "/locations", headers=auth["analyst"], json={"name": "Audit city", "latitude": 0, "longitude": 0}
+    ).json()
+    record = client.post(
+        "/cases",
+        headers=auth["analyst"],
+        json={
+            "location_id": city["id"],
+            "date": date.today().isoformat(),
+            "disease": "influenza",
+            "case_count": 3,
+            "severity": "low",
+        },
+    ).json()
+    assert client.delete(f"/cases/{record['id']}", headers=auth["analyst"]).status_code == 204
+    history = client.get(f"/cases/{record['id']}/history", headers=auth["reader"]).json()
+    assert {change["action"] for change in history} == {"create", "delete"}

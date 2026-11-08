@@ -14,6 +14,7 @@ def evaluate_alerts(db, as_of: date | None = None):
     db.flush()
     rules = db.scalars(select(AlertRule).where(AlertRule.enabled.is_(True))).all()
     created = 0
+    reopen_reasons = {"Rule changed or paused.", "Reported count is below the threshold after data changes."}
     for rule in rules:
         start = as_of - timedelta(days=rule.window_days - 1)
         filters = [Case.date >= start, Case.date <= as_of]
@@ -52,10 +53,11 @@ def evaluate_alerts(db, as_of: date | None = None):
                     .on_conflict_do_nothing(index_elements=["rule_id", "location_id", "disease", "window_end"])
                 )
                 created += result.rowcount
-            elif alert.status != "resolved" or alert.resolution == "Rule changed or paused.":
-                if alert.resolution == "Rule changed or paused.":
+            elif alert.status != "resolved" or alert.resolution in reopen_reasons:
+                if alert.resolution in reopen_reasons:
                     alert.status = "open"
                     alert.resolution = None
+                    alert.acknowledged_by = None
                     alert.rule_name = rule.name
                     alert.threshold = rule.threshold
                     alert.severity = rule.severity

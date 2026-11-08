@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth.security import analyst, current_user
@@ -12,8 +13,12 @@ from app.services.surveillance import add_update, revision, snapshot, validate_l
 router = APIRouter(prefix="/outbreaks", tags=["outbreaks"], dependencies=[Depends(current_user)])
 
 
-def get_outbreak(db, outbreak_id):
-    outbreak = db.get(Outbreak, outbreak_id)
+def get_outbreak(db, outbreak_id, lock=False):
+    outbreak = (
+        db.scalar(select(Outbreak).where(Outbreak.id == outbreak_id).with_for_update())
+        if lock
+        else db.get(Outbreak, outbreak_id)
+    )
     if not outbreak:
         raise HTTPException(404, "Outbreak not found")
     return outbreak
@@ -123,7 +128,7 @@ def detail(outbreak_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{outbreak_id}")
 def update(outbreak_id: int, data: OutbreakInput, user: User = Depends(analyst), db: Session = Depends(get_db)):
-    outbreak = get_outbreak(db, outbreak_id)
+    outbreak = get_outbreak(db, outbreak_id, lock=True)
     previous_status = outbreak.status
     apply_outbreak(db, outbreak, data, user)
     db.flush()
@@ -174,7 +179,7 @@ def observations(outbreak_id: int, candidates: bool = False, page: int = Query(1
 
 @router.post("/{outbreak_id}/observations")
 def link(outbreak_id: int, data: CaseLinks, user: User = Depends(analyst), db: Session = Depends(get_db)):
-    outbreak = get_outbreak(db, outbreak_id)
+    outbreak = get_outbreak(db, outbreak_id, lock=True)
     if outbreak.status == "closed":
         raise HTTPException(409, "Reopen the investigation before changing linked observations")
     ids = set(data.observation_ids)
@@ -190,7 +195,18 @@ def link(outbreak_id: int, data: CaseLinks, user: User = Depends(analyst), db: S
             raise HTTPException(409, "An observation is not linked to this outbreak")
     for observation in records:
         before = snapshot(observation)
-        observation.outbreak_id = outbreak_id if data.action == "attach" else None
+        eligible = (
+            or_(Case.outbreak_id.is_(None), Case.outbreak_id == outbreak_id)
+            if data.action == "attach"
+            else Case.outbreak_id == outbreak_id
+        )
+        changed = db.execute(
+            sql_update(Case)
+            .where(Case.id == observation.id, eligible)
+            .values(outbreak_id=outbreak_id if data.action == "attach" else None)
+        )
+        if changed.rowcount != 1:
+            raise HTTPException(409, "Observation assignment changed. Refresh and retry.")
         revision(db, observation, before, "link" if data.action == "attach" else "unlink", user_id=user.id)
     add_update(
         db,
