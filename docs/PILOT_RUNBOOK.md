@@ -42,7 +42,7 @@ under existing observations. Create a new area and review assignments instead.
 
 Alerts use one continuing current incident per rule/area/disease, serialized by
 rule locks, with separately upserted daily evidence. Acknowledgement persists
-across days. Missing/incomplete/conflicting data is explicit and does not resolve
+across days. Missing/incomplete/conflicting data is explicit; missing/conflicting windows expose no usable current count, even while historical breach evidence is retained. It does not resolve
 an incident. Automatic resolution requires a fully covered below-threshold window.
 Windows shorter than the source reporting period are incompatible. Historical
 exercises are separately labeled and excluded from current monitoring counts.

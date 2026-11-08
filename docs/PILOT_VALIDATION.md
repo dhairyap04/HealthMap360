@@ -12,8 +12,8 @@ Validation completion results are recorded in the final implementation handoff.
 
 ## Final local checks
 
-- SQLite: 104 backend tests passed.
-- PostgreSQL: 103 passed; the SQLite-only restore test was skipped. Actual
+- SQLite: 105 backend tests passed.
+- PostgreSQL: 104 passed; the SQLite-only restore test was skipped. Actual
   PostgreSQL custom-format backup/restore was separately executed and every
   managed table count and the case total matched.
 - A production PostGIS-source/application-role drill restored the managed
@@ -42,7 +42,7 @@ CI on the first implementation commit exposed an off-screen Sign out control on
 shorter Linux desktop layouts. Navigation now scrolls independently and the
 browser workflow asserts Sign out is inside the viewport at 1280×600.
 Workspace date controls also use the server's reporting day to avoid browser UTC
-midnight differences. Final CI status is provided in the implementation handoff.
+midnight differences. CI on 9ef8977 passed the API, frontend and container jobs. A final alert regression ensures a missing current window displays Unavailable rather than a last-breach count; its final CI status is provided in the implementation handoff.
 
 The automated suites emit existing Starlette HTTP-client and SQLite date-adapter
 deprecation warnings. These are not failed assertions; dependency maintenance

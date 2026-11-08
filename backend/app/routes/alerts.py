@@ -117,6 +117,9 @@ def alerts(
                     "updated_at",
                 )
             },
+            "observed_value": None
+            if a.data_state in ("missing", "unknown", "conflict", "incompatible_period")
+            else a.value,
             "location_name": a.location.name,
         }
         for a in db.scalars(query)

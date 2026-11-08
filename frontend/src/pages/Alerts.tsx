@@ -202,8 +202,8 @@ export default function Alerts() {
                   {alert.location_name} · {alert.disease}
                 </p>
                 <p className="alert-count">
-                  <strong>{alert.value.toLocaleString()}</strong> reported cases · threshold{' '}
-                  {alert.threshold.toLocaleString()}
+                  <strong>{alert.observed_value?.toLocaleString() ?? 'Unavailable'}</strong>{' '}
+                  reported cases · threshold {alert.threshold.toLocaleString()}
                 </p>
                 <p className="muted">
                   Reporting state: {alert.data_state.replaceAll('_', ' ')} · latest report:{' '}

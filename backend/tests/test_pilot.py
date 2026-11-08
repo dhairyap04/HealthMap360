@@ -443,3 +443,18 @@ def test_workspace_day_and_publication_source_urls(client, auth):
             "/publications", headers=auth["analyst"], json={**draft_payload(area), "source_url": url}
         )
         assert response.status_code == 422
+
+
+def test_missing_alert_window_does_not_present_last_breach_as_current_count(client, auth):
+    area = place(client, auth)
+    record = observation(client, auth, area).json()
+    client.post(
+        "/alert-rules",
+        headers=auth["analyst"],
+        json={"name": "Missing report signal", "threshold": 10, "window_days": 7},
+    )
+    assert client.get("/alerts", headers=auth["analyst"]).json()[0]["observed_value"] == 100
+    assert client.delete(f"/cases/{record['id']}", headers=auth["analyst"]).status_code == 204
+    alert = client.get("/alerts", headers=auth["analyst"]).json()[0]
+    assert alert["status"] == "open" and alert["data_state"] == "missing"
+    assert alert["observed_value"] is None

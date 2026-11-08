@@ -43,6 +43,7 @@ export type Alert = {
   id: number
   is_historical: boolean
   data_state: string
+  observed_value: number | null
   latest_report_date: string | null
   rule_name: string
   disease: string
