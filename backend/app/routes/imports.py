@@ -16,6 +16,7 @@ from app.models.models import Case, ImportBatch, Location, User
 from app.routes.data import normalize_name
 from app.schemas.health import CaseInput, LocationInput
 from app.services.alerts import evaluate_alerts
+from app.services.locations import active_location
 from app.services.observations import classify_provenance, lock_locations, validate_intervals
 from app.services.surveillance import revision
 
@@ -225,6 +226,8 @@ def import_csv(
             )
             for (key, _, _), observation in observations.items()
         ]
+        for location_id in {row.location_id for row in records}:
+            active_location(db, location_id, lock=False)
         validate_intervals(db, records)
         for record in records:
             db.add(record)

@@ -25,6 +25,7 @@ class Location(Base):
         CheckConstraint("latitude >= -90 AND latitude <= 90", name="latitude_range"),
         CheckConstraint("longitude >= -180 AND longitude <= 180", name="longitude_range"),
         CheckConstraint("population IS NULL OR population >= 0", name="population_nonnegative"),
+        {"sqlite_autoincrement": True},
     )
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
@@ -35,6 +36,7 @@ class Location(Base):
     administrative_level = Column(String(100))
     country_code = Column(String(2))
     region_code = Column(String(6))
+    archived_at = Column(DateTime(timezone=True), index=True)
 
     @property
     def geographic_scope(self):
@@ -324,3 +326,14 @@ class RecoveryToken(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used = Column(Boolean, nullable=False, default=False)
+
+
+class LocationEvent(Base):
+    __tablename__ = "location_events"
+    id = Column(Integer, primary_key=True)
+    # No location FK: a deletion tombstone must survive removal of an unused area.
+    location_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(20), nullable=False)
+    snapshot = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

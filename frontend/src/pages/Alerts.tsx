@@ -24,7 +24,7 @@ export default function Alerts() {
   const [historical, setHistorical] = useState(false)
   const alerts = useApi<Alert[]>(`/alerts${query({ status: filter, historical })}`)
   const rules = useApi<AlertRule[]>('/alert-rules')
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>('/locations?include_archived=true')
   const [editing, setEditing] = useState<AlertRule | 'new' | null>(null)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -354,8 +354,13 @@ export default function Alerts() {
               <select name="location_id" defaultValue={current?.location_id || ''}>
                 <option value="">Each location separately</option>
                 {locations.data?.map((location) => (
-                  <option key={location.id} value={location.id}>
+                  <option
+                    key={location.id}
+                    value={location.id}
+                    disabled={Boolean(location.archived_at && location.id !== current?.location_id)}
+                  >
                     {location.name}
+                    {location.archived_at ? ' (archived)' : ''}
                   </option>
                 ))}
               </select>

@@ -8,6 +8,7 @@ export type User = {
   mfa_required: boolean
 }
 export type Location = {
+  archived_at: string | null
   id: number
   name: string
   latitude: number

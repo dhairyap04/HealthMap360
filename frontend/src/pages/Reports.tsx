@@ -227,7 +227,12 @@ export default function Reports() {
                   {records.data.items.map((row) => (
                     <tr key={row.id}>
                       <td>{row.date}</td>
-                      <td>{row.location.name}</td>
+                      <td>
+                        {row.location.name}
+                        {row.location.archived_at && (
+                          <small className="muted">Archived location</small>
+                        )}
+                      </td>
                       <td>{row.disease}</td>
                       <td>
                         {row.case_count.toLocaleString()}

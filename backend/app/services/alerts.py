@@ -25,7 +25,9 @@ def evaluate_alerts(db, as_of: date | None = None):
         if not rule.enabled:
             continue
         start = as_of - timedelta(days=rule.window_days - 1)
-        scope_ids = select(Location.id).where(scope_expression() == rule.geographic_scope)
+        scope_ids = select(Location.id).where(
+            scope_expression() == rule.geographic_scope, Location.archived_at.is_(None)
+        )
         filters = [Case.location_id.in_(scope_ids), Case.date <= as_of]
         if rule.disease:
             filters.append(Case.disease == rule.disease)
@@ -36,6 +38,7 @@ def evaluate_alerts(db, as_of: date | None = None):
         active = list(
             db.scalars(
                 select(Alert).where(
+                    Alert.location_id.in_(select(Location.id).where(Location.archived_at.is_(None))),
                     Alert.rule_id == rule.id,
                     Alert.is_historical == historical,
                     Alert.status.in_(["open", "acknowledged"]),

@@ -13,7 +13,18 @@ export default function Settings() {
   const { user } = useAuth()
   const writable = user?.role !== 'public'
   const users = useApi<User[]>(user?.role === 'admin' ? '/auth/users' : null)
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>('/locations?include_archived=true')
+  const [showArchived, setShowArchived] = useState(false)
+  const [locationAction, setLocationAction] = useState<{
+    kind: 'delete' | 'archive' | 'restore'
+    location: Location
+  } | null>(null)
+  const usage = useApi<{ can_delete: boolean; references: Record<string, number> }>(
+    locationAction ? `/locations/${locationAction.location.id}/usage` : null,
+  )
+  const visibleLocations = locations.data?.filter(
+    (location) => showArchived || !location.archived_at,
+  )
   const [edit, setEdit] = useState<Location | 'new' | null>(null)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -45,6 +56,30 @@ export default function Settings() {
       form.reset()
     } catch (error) {
       if (errorMessage(error) !== 'Sign in to continue') setError(errorMessage(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function applyLocationAction(kind: 'delete' | 'archive' | 'restore') {
+    if (!locationAction) return
+    setBusy(true)
+    setError('')
+    try {
+      await api(`/locations/${locationAction.location.id}${kind === 'delete' ? '' : `/${kind}`}`, {
+        method: kind === 'delete' ? 'DELETE' : 'POST',
+      })
+      setLocationAction(null)
+      locations.reload()
+      setStatus(
+        kind === 'delete'
+          ? 'Unused location deleted.'
+          : kind === 'archive'
+            ? 'Location archived. Linked history is retained; feeds and location-specific rules are paused.'
+            : 'Location restored. Paused feeds and rules remain paused until you enable them.',
+      )
+    } catch (error) {
+      setError(errorMessage(error))
+      usage.reload()
     } finally {
       setBusy(false)
     }
@@ -84,8 +119,8 @@ export default function Settings() {
             </dd>
           </dl>
           <p className="muted">
-            Public accounts can view and export data. Analysts manage observations, locations and
-            resources. Administrators also manage account access.
+            Public accounts can read approved publications. Analysts manage private observations,
+            locations and resources. Administrators also manage account access.
           </p>
         </section>
         <section className="panel">
@@ -136,14 +171,27 @@ export default function Settings() {
             </button>
           )}
         </div>
+        <p className="muted">
+          Delete unused places, or archive places with linked records to preserve their history.
+          Archived places can be restored.
+        </p>
+        <label className="check-option">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => setShowArchived(event.target.checked)}
+          />
+          Show archived locations
+        </label>
         <LoadState loading={locations.loading} error={locations.error} retry={locations.reload} />
         {locations.data &&
-          (locations.data.length ? (
+          (visibleLocations?.length ? (
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Status</th>
                     <th>Map position</th>
                     <th>Population</th>
                     <th>Administrative level</th>
@@ -151,9 +199,12 @@ export default function Settings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {locations.data.map((l) => (
+                  {visibleLocations.map((l) => (
                     <tr key={l.id}>
                       <td>{l.name}</td>
+                      <td>
+                        <span className="status-pill">{l.archived_at ? 'Archived' : 'Active'}</span>
+                      </td>
                       <td>
                         <a
                           href={`https://www.openstreetmap.org/?mlat=${l.latitude}&mlon=${l.longitude}#map=11/${l.latitude}/${l.longitude}`}
@@ -175,6 +226,29 @@ export default function Settings() {
                           >
                             Edit
                           </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => {
+                              setLocationAction({
+                                kind: l.archived_at ? 'restore' : 'archive',
+                                location: l,
+                              })
+                              setError('')
+                              setStatus('')
+                            }}
+                          >
+                            {l.archived_at ? 'Restore' : 'Archive'}
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => {
+                              setLocationAction({ kind: 'delete', location: l })
+                              setError('')
+                              setStatus('')
+                            }}
+                          >
+                            Delete
+                          </button>
                         </td>
                       )}
                     </tr>
@@ -184,7 +258,8 @@ export default function Settings() {
             </div>
           ) : (
             <p className="empty">
-              Search for a city, region or address to add your first location.
+              No active locations in this view. Add a place or show archived locations to restore
+              one.
             </p>
           ))}
       </section>
@@ -229,6 +304,105 @@ export default function Settings() {
             </div>
           )}
         </section>
+      )}
+      {locationAction && (
+        <Dialog
+          title={`${locationAction.kind === 'delete' ? 'Delete' : locationAction.kind === 'archive' ? 'Archive' : 'Restore'} location`}
+          close={() => {
+            if (!busy) setLocationAction(null)
+          }}
+        >
+          <p>
+            <strong>{locationAction.location.name}</strong>
+          </p>
+          <LoadState loading={usage.loading} error={usage.error} retry={usage.reload} />
+          {usage.data && (
+            <>
+              {Object.values(usage.data.references).some((count) => count > 0) && (
+                <>
+                  <p>Linked records and history:</p>
+                  <ul>
+                    {Object.entries(usage.data.references)
+                      .filter(([, count]) => count > 0)
+                      .map(([label, count]) => (
+                        <li key={label}>
+                          {label.replaceAll('_', ' ')}: {count}
+                        </li>
+                      ))}
+                  </ul>
+                </>
+              )}
+              {locationAction.kind === 'delete' ? (
+                usage.data.can_delete ? (
+                  <p>
+                    This unused location has no linked records. Deletion cannot be undone. A
+                    lifecycle audit entry is retained.
+                  </p>
+                ) : (
+                  <p className="notice">
+                    This location has linked records or history and cannot be deleted.{' '}
+                    {locationAction.location.archived_at
+                      ? 'It is already archived; its history is retained.'
+                      : 'Archive it instead to preserve its history.'}
+                  </p>
+                )
+              ) : locationAction.kind === 'archive' ? (
+                <>
+                  <p>
+                    This hides the location from active maps, overview totals and new-location
+                    selectors. Reports, investigations, resources and audit history are retained.
+                  </p>
+                  <p>
+                    Its feeds and location-specific alert rules will be paused. Existing published
+                    snapshots remain public until an administrator withdraws them in Publication
+                    review.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  This returns the location to active maps and selectors. Previously paused feeds
+                  and alert rules stay paused until you enable them.
+                </p>
+              )}
+              <div className="actions">
+                <button disabled={busy} onClick={() => setLocationAction(null)}>
+                  Cancel
+                </button>
+                {(locationAction.kind !== 'delete' || usage.data.can_delete) && (
+                  <button
+                    className={locationAction.kind === 'delete' ? 'danger' : 'primary'}
+                    disabled={busy}
+                    onClick={() => void applyLocationAction(locationAction.kind)}
+                  >
+                    {busy
+                      ? 'Working…'
+                      : locationAction.kind === 'delete'
+                        ? 'Delete unused location'
+                        : locationAction.kind === 'archive'
+                          ? 'Archive location'
+                          : 'Restore location'}
+                  </button>
+                )}
+                {locationAction.kind === 'delete' &&
+                  !usage.data.can_delete &&
+                  !locationAction.location.archived_at && (
+                    <button
+                      className="primary"
+                      disabled={busy}
+                      onClick={() => setLocationAction({ ...locationAction, kind: 'archive' })}
+                    >
+                      Archive instead
+                    </button>
+                  )}
+              </div>
+            </>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </Dialog>
       )}
       {edit && (
         <Dialog

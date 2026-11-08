@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth.security import analyst
 from app.db.session import get_db
-from app.models.models import Alert, Case, CaseRevision, Feed, Location, Outbreak, Resource, User
+from app.models.models import Alert, Case, CaseRevision, Feed, Location, LocationEvent, Outbreak, Resource, User
 from app.schemas.health import CaseInput, CaseOut, LocationInput, LocationOut, ResourceInput, ResourceOut
 from app.services.alerts import evaluate_alerts
 from app.services.geocoding import search_places
+from app.services.locations import active_location, event, set_archived, usage
 from app.services.observations import classify_provenance, lock_locations, validate_intervals
 from app.services.surveillance import revision, snapshot, validate_link
 
@@ -67,8 +68,11 @@ def save(db, obj):
 
 
 @router.get("/locations", response_model=list[LocationOut])
-def locations(db: Session = Depends(get_db)):
-    return db.scalars(select(Location).order_by(Location.name)).all()
+def locations(include_archived: bool = False, db: Session = Depends(get_db)):
+    statement = select(Location).order_by(Location.name)
+    if not include_archived:
+        statement = statement.where(Location.archived_at.is_(None))
+    return db.scalars(statement).all()
 
 
 @router.get("/locations/search", dependencies=[Depends(analyst)])
@@ -211,7 +215,7 @@ def save_observation(db, observation, before, action, user):
 def create_case(data: CaseInput, user: User = Depends(analyst), db: Session = Depends(get_db)):
     if not db.get(Location, data.location_id):
         raise HTTPException(422, "Location not found")
-    lock_locations(db, [data.location_id])
+    active_location(db, data.location_id)
     validate_intervals(db, [data])
     return save_observation(
         db, Case(**data.model_dump(), provenance=classify_provenance(data.source)), None, "create", user
@@ -259,6 +263,8 @@ def update_case(
     if not db.get(Location, data.location_id):
         raise HTTPException(422, "Location not found")
     lock_locations(db, [observation.location_id, data.location_id])
+    if data.location_id != observation.location_id:
+        active_location(db, data.location_id, lock=False)
     db.refresh(observation)
     if expected_version is not None and expected_version != observation.version:
         raise HTTPException(409, "This observation changed. Refresh before editing again.")
@@ -297,7 +303,11 @@ def delete_case(case_id: int, user: User = Depends(analyst), db: Session = Depen
 def monitoring(db: Session = Depends(get_db)):
     return {
         "open_alerts": db.scalar(
-            select(func.count(Alert.id)).where(Alert.status == "open", Alert.is_historical.is_(False))
+            select(func.count(Alert.id)).where(
+                Alert.status == "open",
+                Alert.is_historical.is_(False),
+                Alert.location_id.in_(select(Location.id).where(Location.archived_at.is_(None))),
+            )
         ),
         "active_outbreaks": db.scalar(select(func.count(Outbreak.id)).where(Outbreak.status != "closed")),
         "enabled_feeds": db.scalar(select(func.count(Feed.id)).where(Feed.enabled.is_(True))),
@@ -321,10 +331,13 @@ def summary(
 ):
     from app.services.geography import scope_expression
 
-    scope_ids = select(Location.id).where(scope_expression() == geographic_scope)
+    scope_ids = select(Location.id).where(scope_expression() == geographic_scope, Location.archived_at.is_(None))
     filters = [*filters, Case.location_id.in_(scope_ids), Case.quality_status == "valid"]
     # Latest available is common to this filtered geography, never a hidden per-place window.
-    freshness_filters = case_filters(None, None, disease, severity, location_id, geographic_scope)
+    freshness_filters = [
+        *case_filters(None, None, disease, severity, location_id, geographic_scope),
+        Case.location_id.in_(scope_ids),
+    ]
     latest = db.scalar(
         select(func.max(Case.date)).where(*freshness_filters, Case.date <= date.today(), Case.quality_status == "valid")
     )
@@ -435,6 +448,8 @@ def validate_resource(data, db):
 @router.post("/resources", response_model=ResourceOut, status_code=201, dependencies=[Depends(analyst)])
 def create_resource(data: ResourceInput, db: Session = Depends(get_db)):
     validate_resource(data, db)
+    if data.location_id:
+        active_location(db, data.location_id)
     return save(db, Resource(**data.model_dump()))
 
 
@@ -444,6 +459,8 @@ def update_resource(resource_id: int, data: ResourceInput, db: Session = Depends
     if not resource:
         raise HTTPException(404, "Resource not found")
     validate_resource(data, db)
+    if data.location_id and data.location_id != resource.location_id:
+        active_location(db, data.location_id)
     for key, value in data.model_dump().items():
         setattr(resource, key, value)
     return save(db, resource)
@@ -491,3 +508,54 @@ def data_health(db: Session = Depends(get_db)):
         "conflicts": db.scalar(select(func.count(Case.id)).where(Case.quality_status != "valid")),
         "note": "Source report dates are independent of successful downloads. Demo data is never live surveillance. At most 500 source series are shown.",
     }
+
+
+@router.get("/locations/{location_id}/usage")
+def location_usage(location_id: int, db: Session = Depends(get_db)):
+    if not db.get(Location, location_id):
+        raise HTTPException(404, "Location not found")
+    return usage(db, location_id)
+
+
+@router.post("/locations/{location_id}/archive", response_model=LocationOut)
+def archive_location(location_id: int, user: User = Depends(analyst), db: Session = Depends(get_db)):
+    return set_archived(db, location_id, user.id, True)
+
+
+@router.post("/locations/{location_id}/restore", response_model=LocationOut)
+def restore_location(location_id: int, user: User = Depends(analyst), db: Session = Depends(get_db)):
+    return set_archived(db, location_id, user.id, False)
+
+
+@router.delete("/locations/{location_id}", status_code=204)
+def delete_location(location_id: int, user: User = Depends(analyst), db: Session = Depends(get_db)):
+    lock_locations(db, [location_id])
+    location = db.get(Location, location_id, populate_existing=True)
+    if not location:
+        raise HTTPException(404, "Location not found")
+    if not usage(db, location_id)["can_delete"]:
+        raise HTTPException(
+            409, "This location has linked records or history. Archive it instead; existing data must be preserved."
+        )
+    event(db, location, user.id, "delete")
+    db.delete(location)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409, "This location was linked to a record while deleting. Refresh and archive it instead."
+        ) from None
+
+
+@router.get("/locations/{location_id}/history")
+def location_history(location_id: int, db: Session = Depends(get_db)):
+    return [
+        {key: getattr(row, key) for key in ("id", "action", "snapshot", "user_id", "created_at")}
+        for row in db.scalars(
+            select(LocationEvent)
+            .where(LocationEvent.location_id == location_id)
+            .order_by(LocationEvent.id.desc())
+            .limit(100)
+        )
+    ]

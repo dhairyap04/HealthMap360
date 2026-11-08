@@ -167,13 +167,18 @@ export default function Feeds() {
                     <span className="badge unassessed">Unassessed</span>
                   </span>
                 </div>
+                {feed.location_archived && (
+                  <p className="notice">
+                    Location archived. Restore it in Settings before enabling synchronization.
+                  </p>
+                )}
                 {feed.last_error && <p className="error">{feed.last_error}</p>}
                 <div className="actions">
                   {writable && (
                     <>
                       <button
                         className="primary"
-                        disabled={busy || !feed.enabled}
+                        disabled={busy || !feed.enabled || feed.location_archived}
                         onClick={() => void sync(feed)}
                       >
                         {busy ? 'Working…' : 'Sync now'}
@@ -187,7 +192,10 @@ export default function Feeds() {
                       >
                         Edit feed
                       </button>
-                      <button disabled={busy} onClick={() => void toggle(feed)}>
+                      <button
+                        disabled={busy || feed.location_archived}
+                        onClick={() => void toggle(feed)}
+                      >
                         {feed.enabled ? 'Pause' : 'Enable'}
                       </button>
                     </>
@@ -293,7 +301,7 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
   const [preview, setPreview] = useState<{ key: string; data: ImportPreview } | null>(null)
   const today = useWorkspaceDate()
   const catalog = useApi<FeedCatalog>(feed ? null : '/feeds/catalog')
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>(feed ? '/locations?include_archived=true' : '/locations')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const countries =

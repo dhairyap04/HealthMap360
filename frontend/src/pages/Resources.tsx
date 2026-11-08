@@ -13,7 +13,7 @@ export default function Resources() {
   const writable = user?.role !== 'public'
   const [location, setLocation] = useState('')
   const resources = useApi<Resource[]>(`/resources${query({ location_id: location })}`)
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>('/locations?include_archived=true')
   const [edit, setEdit] = useState<Resource | 'new' | null>(null)
   const [remove, setRemove] = useState<Resource | null>(null)
   const [error, setError] = useState('')
@@ -197,8 +197,13 @@ export default function Resources() {
               <select name="location_id" defaultValue={current?.location_id ?? ''}>
                 <option value="">Unassigned</option>
                 {locations.data?.map((l) => (
-                  <option value={l.id} key={l.id}>
+                  <option
+                    value={l.id}
+                    key={l.id}
+                    disabled={Boolean(l.archived_at && l.id !== current?.location_id)}
+                  >
                     {l.name}
+                    {l.archived_at ? ' (archived)' : ''}
                   </option>
                 ))}
               </select>

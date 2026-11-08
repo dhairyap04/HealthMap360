@@ -11,7 +11,9 @@ export default function Filters({
   value: FilterValues
   onChange: (value: FilterValues) => void
 }) {
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>(
+    value.time_window ? '/locations' : '/locations?include_archived=true',
+  )
   const diseases = useApi<string[]>('/diseases')
   const change = (key: keyof FilterValues, next: string) =>
     onChange({
@@ -109,7 +111,10 @@ export default function Filters({
               .filter(
                 (l) => !value.geographic_scope || l.geographic_scope === value.geographic_scope,
               )
-              .map((l) => ({ value: String(l.id), label: l.name })),
+              .map((l) => ({
+                value: String(l.id),
+                label: l.name + (l.archived_at ? ' (archived)' : ''),
+              })),
           ]}
         />
         <button

@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.models import Alert, AlertEvaluation, AlertRule, Location, Outbreak, User
 from app.schemas.surveillance import AlertAction, AlertRuleInput
 from app.services.alerts import evaluate_alerts, retire_rule_alerts
+from app.services.locations import active_location
 from app.services.surveillance import add_update, utcnow
 
 router = APIRouter(tags=["alerts"], dependencies=[Depends(analyst)])
@@ -55,8 +56,8 @@ def update_rule(rule_id: int, data: AlertRuleInput, db: Session = Depends(get_db
         raise HTTPException(404, "Alert rule not found")
     if data.location_id and not db.get(Location, data.location_id):
         raise HTTPException(422, "Location not found")
-    db.execute(select(AlertRule).where(AlertRule.id == rule_id).with_for_update())
     validate_rule_area(db, data)
+    db.execute(select(AlertRule).where(AlertRule.id == rule_id).with_for_update())
     retire_rule_alerts(db, rule.id, "Rule changed or paused.")
     for key, value in data.model_dump().items():
         setattr(rule, key, value)
@@ -118,7 +119,7 @@ def alerts(
                 )
             },
             "observed_value": None
-            if a.data_state in ("missing", "unknown", "conflict", "incompatible_period")
+            if a.data_state in ("missing", "unknown", "conflict", "incompatible_period", "archived")
             else a.value,
             "location_name": a.location.name,
         }
@@ -145,6 +146,8 @@ def act(alert_id: int, data: AlertAction, user: User = Depends(analyst), db: Ses
 
 
 def validate_rule_area(db, data):
+    if data.location_id and data.enabled:
+        active_location(db, data.location_id)
     if data.location_id:
         location = db.get(Location, data.location_id)
         if location and location.geographic_scope != data.geographic_scope:
@@ -182,6 +185,9 @@ def evidence(alert_id: int, db: Session = Depends(get_db)):
 
 @router.post("/alerts/{alert_id}/investigation")
 def followup(alert_id: int, user: User = Depends(analyst), db: Session = Depends(get_db)):
+    previous = db.get(Alert, alert_id)
+    if previous and not previous.outbreak_id:
+        active_location(db, previous.location_id)
     db.execute(update(Alert).where(Alert.id == alert_id).values(value=Alert.value))
     alert = db.get(Alert, alert_id, populate_existing=True)
     if not alert:

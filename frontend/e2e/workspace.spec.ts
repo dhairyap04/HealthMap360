@@ -599,3 +599,68 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
     page.getByRole('heading', { name: 'No published reports in this view' }),
   ).toBeVisible()
 })
+
+test('location deletion and reversible archive preserve reporting history', async ({ page }) => {
+  await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
+  await page.goto('/')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
+  const token = await page.evaluate(() => sessionStorage.getItem('healthmap360-token'))
+  const headers = { Authorization: `Bearer ${token}` }
+  const create = async (name: string) => {
+    const response = await page.request.post('/api/locations', {
+      headers,
+      data: { name, latitude: 53, longitude: -113 },
+    })
+    expect(response.status()).toBe(201)
+    return response.json()
+  }
+  const unused = await create('Unused browser location')
+  const linked = await create('Archived browser location')
+  const record = await page.request.post('/api/cases', {
+    headers,
+    data: {
+      location_id: linked.id,
+      date: new Date().toISOString().slice(0, 10),
+      disease: 'influenza',
+      case_count: 42,
+    },
+  })
+  expect(record.status()).toBe(201)
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  const unusedRow = page.getByRole('row').filter({ hasText: unused.name })
+  await unusedRow.getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(unusedRow).toBeVisible()
+  await unusedRow.getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.getByRole('button', { name: 'Delete unused location', exact: true }).click()
+  await expect(unusedRow).toHaveCount(0)
+  const linkedRow = page.getByRole('row').filter({ hasText: linked.name })
+  await linkedRow.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('cannot be deleted')
+  await expect(
+    page.getByRole('button', { name: 'Delete unused location', exact: true }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: 'Archive instead', exact: true }).click()
+  await page.getByRole('button', { name: 'Archive location', exact: true }).click()
+  await expect(linkedRow).toHaveCount(0)
+  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await expect(page.locator('.location-list')).not.toContainText(linked.name)
+  await page.getByRole('link', { name: 'Reports & data', exact: true }).click()
+  await expect(page.getByRole('cell', { name: new RegExp(linked.name) })).toBeVisible()
+  await expect(page.getByRole('cell', { name: new RegExp(linked.name) })).toContainText(
+    'Archived location',
+  )
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('checkbox', { name: 'Show archived locations' }).check()
+  await expect(linkedRow).toContainText('Archived')
+  await linkedRow.getByRole('button', { name: 'Restore', exact: true }).click()
+  await page.getByRole('button', { name: 'Restore location', exact: true }).click()
+  await expect(linkedRow).toContainText('Active')
+  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await expect(page.locator('.location-list')).toContainText(linked.name)
+  const reports = await page.request.get(`/api/cases?location_id=${linked.id}`, { headers })
+  expect(JSON.stringify(await reports.json())).toContain('42')
+})

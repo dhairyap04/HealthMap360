@@ -58,6 +58,7 @@ export type Alert = {
   created_at: string
 }
 export type Feed = {
+  location_archived: boolean
   id: number
   name: string
   provider: 'who_covid_weekly'

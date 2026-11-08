@@ -64,11 +64,13 @@ Compose uses PostGIS, but current mapping uses stored latitude/longitude; spatia
 
 | Role | Access |
 | --- | --- |
-| Public | View dashboard, map, locations, resources and observations; export reports |
-| Analyst | Public access plus import/correct/delete observations, manage locations/resources, view import history |
+| Public | Read approved publication snapshots and their public maps/charts |
+| Analyst | Private dashboard/map, reports and exports; manage observations, locations, resources, feeds, alerts and investigations |
 | Administrator | Analyst access plus account role management |
 
 New registrations receive access only to approved public snapshots. Anonymous visitors can read the same snapshots at `/#/public`. Analyst APIs, internal investigations and audit history require analyst/admin access. Administrators grant roles in Settings after operator identity verification. Production administrators must enroll an authenticator before privileged API access. Password changes, role changes, and logout invalidate existing tokens for the affected account. Tokens live in the browser tab's session storage and expire after 12 hours. Development uses a process-local signing secret when none is configured, so restarting the API requires signing in again. Configure a persistent random secret for multiworker or deployed services.
+
+In **Settings → Locations**, **Delete** permanently removes a place only when it has no linked observations, revisions, resources, feeds, alerts, rules, investigations or publications. The confirmation shows linked record counts and offers **Archive instead** when deletion is blocked. Archive hides the place from active maps, overview totals and new assignments while retaining reports, investigations and audit history. It pauses its feeds and location-specific alert rules, and marks open alerts archived without falsely resolving them. An in-progress feed sync must finish first. Existing published snapshots remain public until an administrator explicitly withdraws them in Publication review. Select **Show archived locations → Restore** to return a place to active use; feeds and rules remain paused until explicitly enabled. Lifecycle actions retain audit entries, including a tombstone after deletion; deleted location IDs are never reused. Migration `0009` adds this lifecycle without deleting existing locations or reports.
 
 ## Data contract and import behavior
 

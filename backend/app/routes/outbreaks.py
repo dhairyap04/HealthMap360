@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.models import Case, Location, Outbreak, OutbreakUpdate, User
 from app.schemas.health import CaseOut, LocationOut
 from app.schemas.surveillance import CaseLinks, OutbreakInput, OutbreakNote
+from app.services.locations import active_location
 from app.services.observations import lock_locations
 from app.services.surveillance import add_update, revision, snapshot, validate_link
 
@@ -76,6 +77,10 @@ def outbreak_json(db, outbreak):
 
 
 def apply_outbreak(db, outbreak, data, user):
+    lock_locations(db, data.location_ids)
+    old_ids = {location.id for location in outbreak.locations}
+    for location_id in set(data.location_ids) - old_ids:
+        active_location(db, location_id, lock=False)
     locations = db.scalars(select(Location).where(Location.id.in_(data.location_ids))).all()
     if len(locations) != len(data.location_ids):
         raise HTTPException(422, "One or more locations do not exist")
@@ -215,6 +220,7 @@ def link(outbreak_id: int, data: CaseLinks, user: User = Depends(analyst), db: S
         raise HTTPException(422, "One or more observations do not exist")
     for observation in records:
         if data.action == "attach":
+            active_location(db, observation.location_id, lock=False)
             if observation.quality_status != "valid":
                 raise HTTPException(409, "Resolve the observation reporting-period conflict before linking it")
             validate_link(db, outbreak_id, observation)

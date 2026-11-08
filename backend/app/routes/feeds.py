@@ -11,6 +11,7 @@ from app.models.models import Feed, FeedRun, User, WorkerHeartbeat
 from app.schemas.surveillance import FeedInput
 from app.services import feeds as feed_service
 from app.services.feeds import catalog, parse_reports, sync_feed, validate_feed
+from app.services.locations import active_location
 from app.services.surveillance import utcnow
 
 router = APIRouter(prefix="/feeds", tags=["feeds"], dependencies=[Depends(analyst)])
@@ -37,6 +38,7 @@ def feed_json(feed):
             )
         },
         "location_name": feed.location.name,
+        "location_archived": bool(feed.location.archived_at),
     }
 
 
@@ -104,6 +106,7 @@ def feeds(db: Session = Depends(get_db)):
 @router.post("", status_code=201)
 def connect(data: FeedInput, user: User = Depends(analyst), db: Session = Depends(get_db)):
     validate_feed(db, data)
+    active_location(db, data.location_id)
     feed = Feed(**data.model_dump(), created_by=user.id, next_sync_at=utcnow())
     db.add(feed)
     try:
@@ -130,6 +133,8 @@ def update_feed(feed_id: int, data: FeedInput, db: Session = Depends(get_db)):
             422,
             "Source country and target location cannot change after connection. Pause this feed and create another.",
         )
+    if data.enabled:
+        active_location(db, data.location_id)
     for key, value in data.model_dump().items():
         setattr(feed, key, value)
     feed.next_sync_at = utcnow()

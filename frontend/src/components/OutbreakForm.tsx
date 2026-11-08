@@ -16,7 +16,7 @@ export default function OutbreakForm({
 }) {
   const today = useWorkspaceDate()
   const { user } = useAuth()
-  const locations = useApi<Location[]>('/locations')
+  const locations = useApi<Location[]>('/locations?include_archived=true')
   const owners = useApi<{ id: number; username: string }[]>('/outbreaks/owners')
   const [status, setStatus] = useState(outbreak?.status || 'investigating')
   const [ownerId, setOwnerId] = useState(String(outbreak?.owner_id || user?.id || ''))
@@ -122,17 +122,24 @@ export default function OutbreakForm({
       />
       <fieldset className="location-choices">
         <legend>Tracked locations · choose at least one</legend>
-        {locations.data?.map((location) => (
-          <label className="check-option" key={location.id}>
-            <input
-              type="checkbox"
-              name="location_ids"
-              value={location.id}
-              defaultChecked={outbreak?.locations.some((l) => l.id === location.id)}
-            />
-            {location.name}
-          </label>
-        ))}
+        {locations.data
+          ?.filter(
+            (location) =>
+              !location.archived_at ||
+              outbreak?.locations.some((saved) => saved.id === location.id),
+          )
+          .map((location) => (
+            <label className="check-option" key={location.id}>
+              <input
+                type="checkbox"
+                name="location_ids"
+                value={location.id}
+                defaultChecked={outbreak?.locations.some((l) => l.id === location.id)}
+              />
+              {location.name}
+              {location.archived_at ? ' (archived)' : ''}
+            </label>
+          ))}
         {locations.data?.length === 0 && <p className="muted">Add locations in Settings first.</p>}
       </fieldset>
       <label>

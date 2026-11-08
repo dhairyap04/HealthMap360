@@ -56,6 +56,8 @@ class Decision(BaseModel):
 
 def build_snapshot(db, data):
     location = db.get(Location, data.location_id)
+    if location and location.archived_at:
+        raise HTTPException(409, "Restore this archived location before preparing or publishing a new snapshot")
     if not location or location.geographic_scope == "unclassified":
         raise HTTPException(422, "Choose a classified reporting area")
     outbreak = db.get(Outbreak, data.outbreak_id) if data.outbreak_id else None

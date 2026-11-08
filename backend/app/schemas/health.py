@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -33,6 +33,7 @@ class LocationInput(BaseModel):
 
 
 class LocationOut(LocationInput):
+    archived_at: datetime | None = None
     geographic_scope: str
     model_config = ConfigDict(from_attributes=True)
     id: int

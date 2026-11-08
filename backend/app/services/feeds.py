@@ -14,7 +14,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.models import Case, Feed, FeedRun, Location
 from app.services.alerts import evaluate_alerts
-from app.services.observations import lock_locations, validate_intervals
+from app.services.locations import active_location
+from app.services.observations import validate_intervals
 from app.services.surveillance import revision, snapshot, utcnow
 
 WHO_URL = "https://srhdpeuwpubsa.blob.core.windows.net/whdh/COVID/WHO-COVID-19-global-data.csv"
@@ -77,6 +78,8 @@ def validate_feed(db, data):
     location = db.get(Location, data.location_id)
     if not location:
         raise HTTPException(422, "Choose a saved country location")
+    if location.archived_at:
+        raise HTTPException(409, "Restore this archived location in Settings before connecting a feed")
     if (location.administrative_level or "").strip().lower() != "country":
         raise HTTPException(
             422, "WHO reports are country-level. Add the country in Settings and choose it instead of a city."
@@ -126,7 +129,7 @@ def sync_feed(db, feed_id, force=False):
     try:
         rows = load_who_rows()
         observations, latest = parse_reports(rows, feed.country_code, feed.start_date)
-        lock_locations(db, [feed.location_id])
+        active_location(db, feed.location_id)
         existing = {
             record.date: record
             for record in db.scalars(
