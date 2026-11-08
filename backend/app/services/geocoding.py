@@ -50,6 +50,7 @@ def _place(raw):
         "country": address.get("country", ""),
         "country_code": str(address.get("country_code", "")).upper() or None,
         "region": address.get("state", ""),
+        "region_code": address.get("ISO3166-2-lvl4"),
     }
 
 

@@ -1426,3 +1426,68 @@ input.row-checkbox {
   display: block;
   margin-top: 5px;
 }
+
+/* Geographic scope and evidence context */
+.view-controls {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+  padding: 18px 22px;
+}
+.scope-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.view-controls > label {
+  min-width: 235px;
+}
+.reporting-context {
+  border-left: 3px solid #387e8c;
+  padding: 15px 20px;
+  margin: 14px 0 22px;
+  background: #f0f6f6;
+  border-radius: 0 10px 10px 0;
+}
+.reporting-context p {
+  margin: 8px 0;
+}
+.reporting-context .status-pill {
+  margin-right: 8px;
+}
+.stale {
+  background: #fff0d6;
+  color: #805818;
+}
+.badge.unassessed {
+  color: #536975;
+  background: #e8eef1;
+}
+.map-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 20px 0;
+}
+.map-total strong {
+  font-size: 2rem;
+  letter-spacing: -1px;
+}
+.map-total span {
+  color: #64776e;
+  font-size: 0.85rem;
+}
+.import-preview {
+  background: #f0f6f6;
+  border: 1px solid #c8ddda;
+  padding: 18px;
+  border-radius: 10px;
+}
+@media (max-width: 700px) {
+  .view-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

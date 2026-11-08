@@ -19,8 +19,8 @@ from app.services.alerts import evaluate_alerts
 from app.services.surveillance import revision
 
 router = APIRouter(prefix="/imports", tags=["imports"])
-REQUIRED = ("date", "location", "disease", "case_count", "severity")
-OPTIONAL = ("source", "latitude", "longitude", "reporting_period_days")
+REQUIRED = ("date", "location", "disease", "case_count")
+OPTIONAL = ("severity", "source", "latitude", "longitude", "reporting_period_days")
 
 
 @router.get("")
@@ -70,7 +70,7 @@ def import_csv(
             raise HTTPException(422, "Invalid column mapping")
         columns = {key: columns.get(key, key) for key in REQUIRED + OPTIONAL}
         if any(columns[key] not in headers for key in REQUIRED):
-            raise HTTPException(422, "Map date, location, disease, case_count and severity to CSV columns")
+            raise HTTPException(422, "Map date, location, disease and case_count to CSV columns")
         active = [v for k, v in columns.items() if k in REQUIRED or v in headers]
         if len(set(active)) != len(active):
             raise HTTPException(422, "Each field must map to a different column")
@@ -134,7 +134,7 @@ def import_csv(
                     date=date_value,
                     disease=get("disease"),
                     case_count=int(count),
-                    severity=get("severity").lower(),
+                    severity=get("severity").lower() or "unassessed",
                     source=get("source") or None,
                     reporting_period_days=int(get("reporting_period_days") or "1"),
                 )

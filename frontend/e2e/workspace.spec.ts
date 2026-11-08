@@ -88,20 +88,22 @@ test('complete public health workspace workflow', async ({ page }) => {
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
   await expect(
     page.locator('.location-list > div').filter({ hasText: 'Lethbridge' }),
-  ).toContainText('No reports yet')
+  ).toContainText('No reports in view')
   await page.locator('.leaflet-overlay-pane path[stroke="#839b90"]').click()
   await expect(page.locator('.leaflet-popup')).toContainText('Lethbridge')
-  await expect(page.locator('.leaflet-popup')).toContainText('No outbreak reports have been added')
+  await expect(page.locator('.leaflet-popup')).toContainText('No reports in this view')
   await page.getByRole('combobox', { name: 'Location', exact: true }).click()
   await page.getByRole('option', { name: 'Lethbridge', exact: true }).click()
   await expect(page.getByRole('heading', { name: '1 saved location', exact: true })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(1)
-  await page.getByRole('combobox', { name: 'Severity', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Assessment', exact: true }).click()
   await page.getByRole('option', { name: 'Critical', exact: true }).click()
   await expect(
     page.locator('.location-list > div').filter({ hasText: 'Lethbridge' }),
   ).toContainText('No reports in view')
   await page.reload()
+  await expect(page.getByRole('heading', { name: '1 saved location', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await expect(page.getByRole('heading', { name: '4 saved locations' })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
 
@@ -195,11 +197,13 @@ test('styled filters support keyboard use and place search requires an explicit 
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  const severity = page.getByRole('combobox', { name: 'Severity', exact: true })
+  const severity = page.getByRole('combobox', { name: 'Assessment', exact: true })
   await severity.click()
   await page.screenshot({ path: 'test-results/filter-menu-desktop.png', fullPage: false })
   await page.keyboard.press('Home')
-  await expect(page.getByRole('option', { name: 'All severities', exact: true })).toBeFocused()
+  await expect(page.getByRole('option', { name: 'All assessments', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(page.getByRole('option', { name: 'Unassessed', exact: true })).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(page.getByRole('option', { name: 'Low', exact: true })).toBeFocused()
   await page.keyboard.press('Enter')
@@ -212,7 +216,7 @@ test('styled filters support keyboard use and place search requires an explicit 
   await expect(page.getByRole('listbox')).toHaveCount(0)
   await expect(severity).toBeFocused()
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
-  await expect(severity).toHaveText('All severities')
+  await expect(severity).toHaveText('All assessments')
   await page.setViewportSize({ width: 390, height: 844 })
   await severity.click()
   await expect(page.getByRole('option', { name: 'Critical', exact: true })).toBeVisible()
@@ -394,6 +398,14 @@ test('investigations, alerts and WHO feeds work through the product screens', as
     .getByRole('combobox', { name: 'Saved country location', exact: true })
     .selectOption({ label: 'Canada' })
   await page.getByLabel('Import reports since', { exact: true }).fill('2026-01-01')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Preview reports', exact: true })
+    .click()
+  await expect(page.getByRole('region', { name: 'Import preview' })).toContainText(
+    '20 reported cases',
+  )
+  await expect(page.getByRole('dialog').getByText('Unassessed', { exact: true })).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: 'Connect feed', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'WHO Canada weekly', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sync now', exact: true }).click()
@@ -414,4 +426,108 @@ test('investigations, alerts and WHO feeds work through the product screens', as
   await expect(page.getByRole('dialog', { name: 'Observation history' })).toContainText(
     'feed import',
   )
+})
+
+test('geography views isolate totals and show historical national boundaries', async ({ page }) => {
+  await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto('/')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
+  const bearer = await page.evaluate(() => sessionStorage.getItem('healthmap360-token'))
+  const headers = { Authorization: `Bearer ${bearer}` }
+  const locations = await (await page.request.get('/api/locations', { headers })).json()
+  const canada = locations.find((place: { name: string }) => place.name === 'Canada')
+  const current = await (
+    await page.request.get(`/api/cases?location_id=${canada.id}`, { headers })
+  ).json()
+  for (const row of current.items) {
+    expect((await page.request.delete(`/api/cases/${row.id}`, { headers })).ok()).toBe(true)
+  }
+  expect(
+    (
+      await page.request.post('/api/cases', {
+        headers,
+        data: {
+          location_id: canada.id,
+          disease: 'covid-19',
+          date: '2021-12-26',
+          case_count: 3189913,
+          source: 'Historical browser fixture',
+          reporting_period_days: 7,
+        },
+      })
+    ).ok(),
+  ).toBe(true)
+  const provinceResponse = await page.request.post('/api/locations', {
+    headers,
+    data: {
+      name: 'Alberta',
+      latitude: 54,
+      longitude: -115,
+      administrative_level: 'province',
+      country_code: 'CA',
+      region_code: 'CA-AB',
+    },
+  })
+  expect(provinceResponse.ok()).toBe(true)
+  const province = await provinceResponse.json()
+  expect(
+    (
+      await page.request.post('/api/cases', {
+        headers,
+        data: {
+          location_id: province.id,
+          disease: 'covid-19',
+          date: '2021-12-26',
+          case_count: 500,
+          reporting_period_days: 7,
+        },
+      })
+    ).ok(),
+  ).toBe(true)
+  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await expect(page.locator('.location-list')).not.toContainText('Canada')
+  await expect(page.locator('.location-list')).not.toContainText('Alberta')
+  await page.getByRole('button', { name: 'National', exact: true }).click()
+  await expect(page.locator('.map-total strong')).toHaveText('—')
+  await expect(page.getByRole('region', { name: 'Reporting context' })).toContainText('2021-12-26')
+  await expect(page.locator('.location-list')).toContainText('No reports in view')
+  await page.getByRole('combobox', { name: 'Reporting window', exact: true }).click()
+  await page.getByRole('option', { name: 'Latest available week', exact: true }).click()
+  await expect(page.locator('.map-total strong')).toHaveText('3,189,913')
+  await expect(page.getByRole('region', { name: 'Reporting context' })).toContainText(
+    'Historical source',
+  )
+  await expect(page.locator('.location-list')).toContainText('unassessed')
+  await expect(page.locator('.leaflet-overlay-pane path.leaflet-interactive')).toHaveCount(1)
+  await expect(page.locator('.leaflet-overlay-pane path')).toHaveAttribute('fill-opacity', '0.22')
+  await page
+    .locator('.leaflet-overlay-pane path')
+    .click({ position: { x: 130, y: 170 }, force: true })
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'National', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.locator('.map-total strong')).toHaveText('3,189,913')
+  await page.screenshot({ path: 'test-results/national-historical-map.png', fullPage: true })
+  await page.getByRole('link', { name: 'Review reports', exact: false }).click()
+  await expect(page.locator('tbody').first()).toContainText('Canada')
+  await expect(page.locator('tbody').first()).not.toContainText('Edmonton')
+  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await page.getByRole('button', { name: 'Regional', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reporting window', exact: true }).click()
+  await page.getByRole('option', { name: 'Historical range', exact: true }).click()
+  await expect(page.locator('.map-total strong')).toHaveText('500')
+  await expect(page.locator('.location-list')).toContainText('Alberta')
+  await expect(page.locator('.location-list')).not.toContainText('Canada')
+  await expect(page.locator('.leaflet-overlay-pane path.leaflet-interactive')).toHaveCount(1)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('button', { name: 'Regional', exact: true })).toBeVisible()
+  await page.screenshot({ path: 'test-results/regional-map-mobile.png', fullPage: true })
+  expect(errors).toEqual([])
 })

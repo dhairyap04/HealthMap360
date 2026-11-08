@@ -2,8 +2,14 @@ import Papa from 'papaparse'
 
 export const MAX_ROWS = 10000
 export const MAX_BYTES = 50 * 1024 * 1024
-export const REQUIRED_FIELDS = ['date', 'location', 'disease', 'case_count', 'severity'] as const
-export const OPTIONAL_FIELDS = ['source', 'latitude', 'longitude', 'reporting_period_days'] as const
+export const REQUIRED_FIELDS = ['date', 'location', 'disease', 'case_count'] as const
+export const OPTIONAL_FIELDS = [
+  'severity',
+  'source',
+  'latitude',
+  'longitude',
+  'reporting_period_days',
+] as const
 export type RequiredField = (typeof REQUIRED_FIELDS)[number]
 export type CsvField = RequiredField | (typeof OPTIONAL_FIELDS)[number]
 export type RawCsvRow = Record<string, string>
@@ -14,7 +20,7 @@ export type RowValidation = {
   isValid: boolean
   issues: { field: CsvField; message: string }[]
 }
-export const SEVERITY_LEVELS = new Set(['low', 'medium', 'high', 'critical'])
+export const SEVERITY_LEVELS = new Set(['unassessed', 'low', 'medium', 'high', 'critical'])
 
 export function parseCsvText(text: string): ParsedCsv {
   if (text.includes('\0')) throw new Error('CSV contains invalid null characters')
@@ -104,8 +110,11 @@ export function validateRows(rows: RawCsvRow[], mapping: ColumnMapping): RowVali
         field: 'case_count',
         message: 'Use a nonnegative whole number, up to 2,147,483,647',
       })
-    if (!SEVERITY_LEVELS.has(value('severity').toLowerCase()))
-      issues.push({ field: 'severity', message: 'Use low, medium, high or critical' })
+    if (value('severity') && !SEVERITY_LEVELS.has(value('severity').toLowerCase()))
+      issues.push({
+        field: 'severity',
+        message: 'Use unassessed, low, medium, high or critical (blank defaults to unassessed)',
+      })
     if (value('source').length > 300)
       issues.push({ field: 'source', message: 'Source must be 300 characters or fewer' })
     if (value('latitude') || value('longitude')) {

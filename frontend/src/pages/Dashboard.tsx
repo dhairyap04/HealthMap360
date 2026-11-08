@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CartesianGrid,
@@ -15,12 +14,13 @@ import Filters from '../components/Filters'
 import MonitoringStrip from '../components/MonitoringStrip'
 import LoadState from '../components/LoadState'
 import { query } from '../lib/api'
-import { emptyFilters } from '../lib/types'
+import { useReportingFilters } from '../lib/reporting'
+import ReportingContext from '../components/ReportingContext'
 import type { Summary } from '../lib/types'
 import { useApi } from '../lib/useApi'
 
 export default function Dashboard() {
-  const [filters, setFilters] = useState({ ...emptyFilters })
+  const [filters, setFilters] = useReportingFilters()
   const { data, loading, error, reload } = useApi<Summary>(`/summary${query(filters)}`)
   return (
     <>
@@ -39,16 +39,21 @@ export default function Dashboard() {
       <LoadState loading={loading} error={error} retry={reload} />
       {data && (
         <>
+          <ReportingContext view={data.view} />
           <div className="stats-grid">
             {[
-              ['Reported cases', data.total_cases, 'Sum within selected filters'],
+              [
+                'Reported cases',
+                data.observations ? data.total_cases : '—',
+                'Sum within selected filters',
+              ],
               ['Affected locations', data.affected_locations, 'Locations with observations'],
               ['Diseases tracked', data.diseases, 'Distinct diseases in view'],
-              ['Resource units', data.resource_units, 'Current stock; location filter only'],
+              ['Resource units', data.resource_units, 'Current stock in selected geography'],
             ].map(([label, value, note]) => (
               <section className="stat" key={label}>
                 <p>{label}</p>
-                <strong>{Number(value).toLocaleString()}</strong>
+                <strong>{typeof value === 'number' ? value.toLocaleString() : value}</strong>
                 <small>{note}</small>
               </section>
             ))}
@@ -118,7 +123,7 @@ export default function Dashboard() {
                       <tr>
                         <th>Location</th>
                         <th>Reported cases</th>
-                        <th>Highest reported severity</th>
+                        <th>Highest reviewed assessment</th>
                       </tr>
                     </thead>
                     <tbody>

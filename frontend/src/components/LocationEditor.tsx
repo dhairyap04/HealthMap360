@@ -6,7 +6,13 @@ import type { Location, PlaceResult } from '../lib/types'
 
 type Selection = Pick<
   PlaceResult,
-  'name' | 'label' | 'latitude' | 'longitude' | 'administrative_level' | 'country_code'
+  | 'name'
+  | 'label'
+  | 'latitude'
+  | 'longitude'
+  | 'administrative_level'
+  | 'country_code'
+  | 'region_code'
 >
 export default function LocationEditor({
   location,
@@ -82,8 +88,14 @@ export default function LocationEditor({
       latitude: selected.latitude,
       longitude: selected.longitude,
       country_code: selected.country_code || null,
+      region_code: fields.region_code || selected.region_code || null,
       population: fields.population ? Number(fields.population) : null,
-      administrative_level: fields.administrative_level || selected.administrative_level || null,
+      administrative_level:
+        fields.geographic_scope === 'national'
+          ? 'country'
+          : fields.geographic_scope === 'regional'
+            ? 'state'
+            : 'city',
     }
     setSaving(true)
     onBusyChange(true)
@@ -273,6 +285,35 @@ export default function LocationEditor({
               onChange={(e) => setName(e.target.value)}
             />
           </label>
+          <label>
+            Reporting geography
+            <select
+              name="geographic_scope"
+              key={`${selected.latitude}:${selected.longitude}`}
+              defaultValue={
+                location?.geographic_scope === 'unclassified'
+                  ? ''
+                  : location?.geographic_scope ||
+                    (selected.administrative_level.toLowerCase() === 'country'
+                      ? 'national'
+                      : ['state', 'province', 'region', 'territory'].includes(
+                            selected.administrative_level.toLowerCase(),
+                          )
+                        ? 'regional'
+                        : 'local')
+              }
+              required
+              disabled={saving}
+            >
+              <option value="">Choose reporting geography…</option>
+              <option value="local">Local · city or site</option>
+              <option value="regional">Regional · province or state</option>
+              <option value="national">National · country</option>
+            </select>
+          </label>
+          <p className="muted">
+            Reports for this place appear only in the selected geography view.
+          </p>
           <details className="place-details">
             <summary>Optional details</summary>
             <div className="form-stack">
@@ -289,14 +330,18 @@ export default function LocationEditor({
                 />
               </label>
               <label>
-                Administrative level
+                Region identifier (for province or state outlines)
                 <input
-                  name="administrative_level"
-                  maxLength={100}
-                  defaultValue={location?.administrative_level || ''}
-                  placeholder={selected.administrative_level || 'e.g. City'}
+                  name="region_code"
+                  pattern="[A-Z]{2}-[A-Z0-9]{1,3}"
+                  maxLength={6}
+                  defaultValue={selected.region_code || ''}
+                  placeholder="e.g. CA-AB"
                   disabled={saving}
                 />
+                <small className="muted">
+                  Filled automatically when available from place search.
+                </small>
               </label>
             </div>
           </details>

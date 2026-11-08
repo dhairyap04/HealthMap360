@@ -96,7 +96,8 @@ class FeedInput(BaseModel):
     provider: Literal["who_covid_weekly"] = "who_covid_weekly"
     country_code: str = Field(pattern=r"^[A-Z]{2}$")
     location_id: int = Field(gt=0)
-    severity: Severity = "low"
+    # Accepted for backwards compatibility; feeds never assign an assessment.
+    severity: str = "unassessed"
     start_date: date
     interval_minutes: int = Field(default=1440, ge=60, le=10080)
     enabled: bool = True
@@ -110,6 +111,7 @@ class FeedInput(BaseModel):
 
     @model_validator(mode="after")
     def valid_date(self):
+        self.severity = "unassessed"
         if self.start_date > date.today():
             raise ValueError("Start date cannot be in the future")
         return self

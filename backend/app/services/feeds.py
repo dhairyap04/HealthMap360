@@ -124,30 +124,7 @@ def sync_feed(db, feed_id, force=False):
     run_id = run.id
     try:
         rows = load_who_rows()
-        observations = {}
-        latest = None
-        for row in rows:
-            if row["Country_code"].strip().upper() != feed.country_code:
-                continue
-            if not row["New_cases"].strip():
-                continue  # Missing surveillance data must not become a zero.
-            report_date = date.fromisoformat(row["Date_reported"])
-            count_text = row["New_cases"].strip()
-            if not count_text.lstrip("-").isdigit():
-                raise ValueError(f"Invalid source count on {report_date}")
-            count = int(count_text)
-            latest = max(latest, report_date) if latest else report_date
-            if report_date < feed.start_date or report_date > date.today():
-                continue
-            if not 0 <= count <= 2147483647:
-                raise ValueError(
-                    f"Source contains a negative retrospective adjustment or oversized count on {report_date}. Nothing was imported; this interval requires source review."
-                )
-            if report_date in observations and observations[report_date] != count:
-                raise ValueError("Source has conflicting duplicate reporting weeks")
-            observations[report_date] = count
-        if latest is None:
-            raise ValueError("No numeric reports are available for this source country")
+        observations, latest = parse_reports(rows, feed.country_code, feed.start_date)
         existing = {
             record.date: record
             for record in db.scalars(
@@ -177,7 +154,7 @@ def sync_feed(db, feed_id, force=False):
                     date=day,
                     disease="covid-19",
                     case_count=count,
-                    severity=feed.severity,
+                    severity="unassessed",
                     source="WHO COVID-19 weekly country reports",
                     reporting_period_days=7,
                     feed_id=feed.id,
@@ -198,7 +175,7 @@ def sync_feed(db, feed_id, force=False):
         run.status = "success"
         run.imported, run.updated, run.skipped = imported, updated, skipped
         run.latest_report_date = latest
-        run.message = "WHO source revisions are tracked; severity is the analyst-selected review label."
+        run.message = "WHO source revisions are tracked. New reports are unassessed; case counts do not determine response priority."
         if not observations:
             run.message = (
                 f"No reports in the selected interval. Latest source report: {latest}. Missing reports are not zero."
@@ -224,3 +201,33 @@ def sync_feed(db, feed_id, force=False):
         feed.lease_until = None
         db.commit()
     return db.get(FeedRun, run_id)
+
+
+def parse_reports(rows, country_code, start_date):
+    observations = {}
+    latest = None
+    for row in rows:
+        if row["Country_code"].strip().upper() != country_code:
+            continue
+        if not row["New_cases"].strip():
+            continue  # Missing surveillance data must not become a zero.
+        report_date = date.fromisoformat(row["Date_reported"])
+        count_text = row["New_cases"].strip()
+        if not count_text.lstrip("-").isdigit():
+            raise ValueError(f"Invalid source count on {report_date}")
+        count = int(count_text)
+        if report_date > date.today():
+            continue
+        latest = max(latest, report_date) if latest else report_date
+        if report_date < start_date:
+            continue
+        if not 0 <= count <= 2147483647:
+            raise ValueError(
+                f"Source contains a negative retrospective adjustment or oversized count on {report_date}. Nothing was imported; this interval requires source review."
+            )
+        if report_date in observations and observations[report_date] != count:
+            raise ValueError("Source has conflicting duplicate reporting weeks")
+        observations[report_date] = count
+    if latest is None:
+        raise ValueError("No numeric reports are available for this source country")
+    return observations, latest

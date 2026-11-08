@@ -68,7 +68,7 @@ def test_feed_sync_idempotence_revisions_and_weekly_export(client, auth, source,
     assert revised["updated"] == 1
     data = client.get("/cases", headers=auth["reader"]).json()["items"]
     assert all(row["reporting_period_days"] == 7 and row["feed_id"] == feed["id"] for row in data)
-    assert client.get("/summary", headers=auth["reader"]).json()["total_cases"] == 20
+    assert client.get("/summary?geographic_scope=national", headers=auth["reader"]).json()["total_cases"] == 20
     exported = client.get("/cases/export", headers=auth["reader"]).text
     assert "reporting_period_days" in exported
     assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["reader"]).json()) == 3
@@ -138,7 +138,7 @@ def test_manual_corrections_are_not_overwritten(client, auth, source, connection
     assert corrected.status_code == 200 and corrected.json()["feed_id"] is None
     result = client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()
     assert result["status"] == "failed" and "analyst-owned" in result["message"]
-    assert client.get("/summary", headers=auth["reader"]).json()["total_cases"] == 21
+    assert client.get("/summary?geographic_scope=national", headers=auth["reader"]).json()["total_cases"] == 21
 
 
 def test_pause_works_during_source_outage(client, auth, source, connection, monkeypatch):
@@ -170,3 +170,62 @@ def test_worker_processes_due_feeds_and_reports_heartbeat(client, auth, source, 
     assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["reader"]).json()) == 1
     with Session(database) as db:
         assert db.get(Feed, feed["id"]).lease_until is None
+
+
+def test_preview_is_read_only_and_imports_never_take_feed_priority(client, auth, source, connection, database):
+    feed, payload = connection
+    preview = client.post("/feeds/preview", headers=auth["analyst"], json={**payload, "severity": "critical"})
+    assert preview.status_code == 200, preview.text
+    data = preview.json()
+    assert data["records"] == 2 and data["reported_cases"] == 12
+    assert data["assessment"] == "unassessed" and data["reporting_period_days"] == 7
+    with Session(database) as db:
+        assert db.scalar(select(func.count(Case.id))) == 0
+    assert client.post("/feeds/preview", headers=auth["reader"], json=payload).status_code == 403
+    assert client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()["imported"] == 2
+    rows = client.get("/cases", headers=auth["reader"]).json()["items"]
+    assert all(row["severity"] == "unassessed" for row in rows)
+    # A deliberate assessment is retained when WHO revises its factual count.
+    row = next(row for row in rows if row["case_count"] == 12)
+    review = client.put(f"/cases/{row['id']}", headers=auth["analyst"], json={**row, "severity": "high"})
+    assert review.status_code == 200 and review.json()["feed_id"] == feed["id"]
+    source[0]["New_cases"] = "25"
+    assert client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()["updated"] == 1
+    revised = next(r for r in client.get("/cases", headers=auth["reader"]).json()["items"] if r["id"] == row["id"])
+    assert revised["severity"] == "high" and revised["case_count"] == 25
+
+
+def test_preview_checks_source_adjustments_missing_and_historical_data(client, auth, source, connection):
+    _, payload = connection
+    source[0]["New_cases"] = "-5"
+    assert client.post("/feeds/preview", headers=auth["analyst"], json=payload).status_code == 422
+    source[0]["New_cases"] = ""
+    preview = client.post("/feeds/preview", headers=auth["analyst"], json=payload).json()
+    assert preview["records"] == 1 and preview["reported_cases"] == 0
+    source[0].update(Date_reported="2021-12-26", New_cases="123")
+    source[1]["New_cases"] = ""
+    preview = client.post(
+        "/feeds/preview", headers=auth["analyst"], json={**payload, "start_date": "2021-01-01"}
+    ).json()
+    assert preview["historical"] is True and preview["latest_source_report"] == "2021-12-26"
+    assert preview["reported_cases"] == 123
+
+
+def test_feed_country_identity_cannot_be_changed_through_location_editor(client, auth, source, connection):
+    feed, _ = connection
+    location = next(
+        place for place in client.get("/locations", headers=auth["reader"]).json() if place["id"] == feed["location_id"]
+    )
+    for change in [{"administrative_level": "city"}, {"country_code": "US"}]:
+        assert (
+            client.put(f"/locations/{location['id']}", headers=auth["analyst"], json={**location, **change}).status_code
+            == 422
+        )
+    assert (
+        client.put(
+            f"/locations/{location['id']}",
+            headers=auth["analyst"],
+            json={**location, "name": "Canada national reports"},
+        ).status_code
+        == 200
+    )

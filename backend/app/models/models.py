@@ -34,6 +34,14 @@ class Location(Base):
     population = Column(Integer)
     administrative_level = Column(String(100))
     country_code = Column(String(2))
+    region_code = Column(String(6))
+
+    @property
+    def geographic_scope(self):
+        from app.services.geography import scope_for
+
+        return scope_for(self.administrative_level)
+
     cases = relationship("Case", back_populates="location")
 
 
@@ -43,7 +51,7 @@ class Case(Base):
         UniqueConstraint("location_id", "date", "disease", name="uq_case_observation"),
         CheckConstraint("case_count >= 0", name="case_count_nonnegative"),
         CheckConstraint("reporting_period_days IN (1, 7)", name="case_reporting_period"),
-        CheckConstraint("severity IN ('low', 'medium', 'high', 'critical')", name="case_severity"),
+        CheckConstraint("severity IN ('unassessed', 'low', 'medium', 'high', 'critical')", name="case_severity"),
     )
     id = Column(Integer, primary_key=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False, index=True)
@@ -185,7 +193,7 @@ class Feed(Base):
     provider = Column(String(40), nullable=False)
     country_code = Column(String(2), nullable=False)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
-    severity = Column(String(20), nullable=False, default="low")
+    severity = Column(String(20), nullable=False, default="unassessed")
     start_date = Column(Date, nullable=False)
     interval_minutes = Column(Integer, nullable=False, default=1440)
     enabled = Column(Boolean, nullable=False, default=True)

@@ -11,14 +11,14 @@ import LoadState from '../components/LoadState'
 import { api, downloadCases, errorMessage, query } from '../lib/api'
 import { guessMapping, REQUIRED_FIELDS, validateRows } from '../lib/csv'
 import type { ColumnMapping, ParsedCsv } from '../lib/csv'
-import { emptyFilters } from '../lib/types'
+import { useReportingFilters } from '../lib/reporting'
 import type { ImportBatch, Observation, Page } from '../lib/types'
 import { useApi } from '../lib/useApi'
 
 export default function Reports() {
   const { user } = useAuth()
   const writable = user?.role !== 'public'
-  const [filters, setFilters] = useState({ ...emptyFilters })
+  const [filters, setFilters] = useReportingFilters(false)
   const [page, setPage] = useState(1)
   const [filterRevision, setFilterRevision] = useState(0)
   const records = useApi<Page<Observation>>(`/cases${query({ ...filters, page })}`)
@@ -218,7 +218,7 @@ export default function Reports() {
                     <th>Cases</th>
                     <th>Period</th>
                     <th>Investigation</th>
-                    <th>Severity</th>
+                    <th>Assessment</th>
                     <th>Source</th>
                     {writable && <th>Actions</th>}
                   </tr>
@@ -369,9 +369,9 @@ export default function Reports() {
               </select>
             </label>
             <label>
-              Severity
+              Assessment
               <select name="severity" defaultValue={edit.severity}>
-                {['low', 'medium', 'high', 'critical'].map((s) => (
+                {['unassessed', 'low', 'medium', 'high', 'critical'].map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>

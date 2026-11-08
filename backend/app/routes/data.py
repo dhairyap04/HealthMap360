@@ -1,6 +1,7 @@
 import csv
 import io
-from datetime import date
+from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -17,7 +18,7 @@ from app.services.geocoding import search_places
 from app.services.surveillance import revision, snapshot, validate_link
 
 router = APIRouter(tags=["data"], dependencies=[Depends(current_user)])
-SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+SEVERITY_ORDER = {"unassessed": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
 def normalize_name(name: str):
@@ -30,12 +31,17 @@ def case_filters(
     disease: str | None = Query(None, max_length=120),
     severity: str | None = None,
     location_id: int | None = Query(None, gt=0),
+    geographic_scope: Literal["local", "regional", "national"] | None = None,
 ):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "Start date must be before end date")
     if severity and severity not in SEVERITY_ORDER:
         raise HTTPException(422, "Unknown severity")
     filters = []
+    if geographic_scope:
+        from app.services.geography import scope_expression
+
+        filters.append(Case.location_id.in_(select(Location.id).where(scope_expression() == geographic_scope)))
     for value, clause in [
         (date_from, lambda: Case.date >= date_from),
         (date_to, lambda: Case.date <= date_to),
@@ -82,6 +88,12 @@ def update_location(location_id: int, data: LocationInput, db: Session = Depends
     location = db.get(Location, location_id)
     if not location:
         raise HTTPException(404, "Location not found")
+    if db.scalar(select(Feed.id).where(Feed.location_id == location_id).limit(1)) and (
+        (data.administrative_level or "").strip().lower() != "country" or data.country_code != location.country_code
+    ):
+        raise HTTPException(
+            422, "This location is linked to a national feed. Its country and geography must stay unchanged."
+        )
     for key, value in data.model_dump().items():
         setattr(location, key, value)
     location.name_key = normalize_name(data.name)
@@ -230,8 +242,13 @@ def update_case(case_id: int, data: CaseInput, user: User = Depends(analyst), db
     before = snapshot(observation)
     for key, value in data.model_dump().items():
         setattr(observation, key, value)
-    # An explicit analyst correction takes ownership; a feed cannot overwrite it.
-    observation.feed_id = None
+    # A review label does not prevent future factual source corrections.
+    if any(
+        before[key] != (str(value) if key == "date" else value)
+        for key, value in data.model_dump().items()
+        if key != "severity"
+    ):
+        observation.feed_id = None
     return save_observation(db, observation, before, "update", user)
 
 
@@ -260,8 +277,34 @@ def monitoring(db: Session = Depends(get_db)):
 
 @router.get("/summary")
 def summary(
-    filters: list = Depends(case_filters), location_id: int | None = Query(None, gt=0), db: Session = Depends(get_db)
+    filters: list = Depends(case_filters),
+    location_id: int | None = Query(None, gt=0),
+    geographic_scope: Literal["local", "regional", "national"] = "local",
+    time_window: Literal["last28", "latest", "historical"] = "last28",
+    disease: str | None = Query(None, max_length=120),
+    severity: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
 ):
+    from app.services.geography import scope_expression
+
+    scope_ids = select(Location.id).where(scope_expression() == geographic_scope)
+    filters = [*filters, Case.location_id.in_(scope_ids)]
+    # Latest available is common to this filtered geography, never a hidden per-place window.
+    freshness_filters = case_filters(None, None, disease, severity, location_id, geographic_scope)
+    latest = db.scalar(select(func.max(Case.date)).where(*freshness_filters, Case.date <= date.today()))
+    first = db.scalar(select(func.min(Case.date)).where(*filters))
+    start, end = date_from, date_to
+    if time_window == "last28":
+        start, end = date.today() - timedelta(days=27), date.today()
+    elif time_window == "latest":
+        end = latest
+        start = end - timedelta(days=6) if end else None
+    if start:
+        filters.append(Case.date >= start)
+    if end:
+        filters.append(Case.date <= end)
     totals = db.execute(
         select(
             func.coalesce(func.sum(Case.case_count), 0),
@@ -291,16 +334,28 @@ def summary(
             Location.longitude,
             func.sum(Case.case_count),
             func.max(ranks),
+            func.min(Case.date),
+            func.max(Case.date),
         )
         .join(Case)
         .where(*filters)
         .group_by(Location.id, Location.name, Location.latitude, Location.longitude)
         .order_by(func.sum(Case.case_count).desc())
     ).all()
-    resource_query = select(func.coalesce(func.sum(Resource.quantity), 0))
+    resource_query = select(func.coalesce(func.sum(Resource.quantity), 0)).where(Resource.location_id.in_(scope_ids))
     if location_id:
         resource_query = resource_query.where(Resource.location_id == location_id)
     return {
+        "view": {
+            "geographic_scope": geographic_scope,
+            "time_window": time_window,
+            "date_from": start if start else first,
+            "date_to": end if end else latest,
+            "latest_report_date": latest,
+            "historical": bool(latest and (date.today() - latest).days > 30),
+            "reporting_periods": list(db.scalars(select(Case.reporting_period_days).where(*filters).distinct())),
+            "sources": list(db.scalars(select(Case.source).where(*filters, Case.source.is_not(None)).distinct())),
+        },
         "total_cases": totals[0],
         "observations": totals[1],
         "affected_locations": totals[2],
@@ -310,8 +365,17 @@ def summary(
         "by_disease": [{"disease": d, "cases": n} for d, n in disease_rows],
         "by_severity": [{"severity": s, "cases": n} for s, n in severity_rows],
         "locations": [
-            {"id": i, "name": n, "latitude": lat, "longitude": lon, "cases": c, "severity": list(SEVERITY_ORDER)[rank]}
-            for i, n, lat, lon, c, rank in hotspots
+            {
+                "id": i,
+                "name": n,
+                "latitude": lat,
+                "longitude": lon,
+                "cases": c,
+                "severity": list(SEVERITY_ORDER)[rank],
+                "first_report": str(first),
+                "latest_report": str(last),
+            }
+            for i, n, lat, lon, c, rank, first, last in hotspots
         ],
     }
 

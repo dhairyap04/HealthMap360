@@ -162,8 +162,8 @@ export default function Feeds() {
                     {feed.start_date}
                   </span>
                   <span>
-                    <small>REVIEW SEVERITY</small>
-                    <span className={`badge ${feed.severity}`}>{feed.severity}</span>
+                    <small>NEW REPORTS</small>
+                    <span className="badge unassessed">Unassessed</span>
                   </span>
                 </div>
                 {feed.last_error && <p className="error">{feed.last_error}</p>}
@@ -192,6 +192,12 @@ export default function Feeds() {
                     </>
                   )}
                   <button onClick={() => setHistoryId(feed.id)}>View sync history</button>
+                  <Link
+                    className="button"
+                    to={`/map?geographic_scope=national&time_window=historical&location_id=${feed.location_id}&date_from=${feed.start_date}`}
+                  >
+                    View national reports →
+                  </Link>
                 </div>
               </section>
             ))}
@@ -273,7 +279,17 @@ export default function Feeds() {
     </>
   )
 }
+type ImportPreview = {
+  records: number
+  reported_cases: number
+  first_report: string | null
+  last_report: string | null
+  latest_source_report: string
+  historical: boolean
+  note: string
+}
 function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void }) {
+  const [preview, setPreview] = useState<{ key: string; data: ImportPreview } | null>(null)
   const catalog = useApi<FeedCatalog>(feed ? null : '/feeds/catalog')
   const locations = useApi<Location[]>('/locations')
   const [busy, setBusy] = useState(false)
@@ -292,7 +308,6 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
       provider: 'who_covid_weekly',
       country_code: feed?.country_code || fields.get('country_code'),
       location_id: feed?.location_id || Number(fields.get('location_id')),
-      severity: fields.get('severity'),
       start_date: fields.get('start_date'),
       interval_minutes: Number(fields.get('interval_minutes')),
       enabled: fields.get('enabled') === 'on',
@@ -300,6 +315,12 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
     setBusy(true)
     setError('')
     try {
+      const key = JSON.stringify(body)
+      if (!feed && preview?.key !== key) {
+        const data = await api<ImportPreview>('/feeds/preview', { method: 'POST', body: key })
+        setPreview({ key, data })
+        return
+      }
       saved(
         await api<Feed>(feed ? `/feeds/${feed.id}` : '/feeds', {
           method: feed ? 'PUT' : 'POST',
@@ -313,7 +334,7 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
     }
   }
   return (
-    <form onSubmit={submit} className="form-stack">
+    <form onSubmit={submit} className="form-stack" onChange={() => setPreview(null)}>
       <p className="muted">
         Match the source country to the same saved country. National reports must not be assigned to
         a city.
@@ -398,23 +419,39 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
           </select>
         </label>
       </div>
-      <label>
-        Review severity
-        <select name="severity" defaultValue={feed?.severity || 'low'}>
-          {['low', 'medium', 'high', 'critical'].map((value) => (
-            <option key={value}>{value}</option>
-          ))}
-        </select>
-      </label>
       <p className="muted">
-        Severity is your review label for new imported records; WHO does not supply this
-        classification. Changed source counts are audited. Manually corrected records are protected
-        from overwrite.
+        Imported reports start unassessed. After import, review the reporting dates, counts and
+        source freshness. Assign an investigation response priority when appropriate; raw case
+        totals do not determine severity.
       </p>
       <label className="check-option">
         <input type="checkbox" name="enabled" defaultChecked={feed?.enabled ?? true} />
         Enable scheduled synchronization
       </label>
+      {preview && (
+        <section className="import-preview" aria-label="Import preview">
+          <h3>Import preview · national / weekly</h3>
+          <p>
+            <strong>{preview.data.reported_cases.toLocaleString()} reported cases</strong> across{' '}
+            {preview.data.records.toLocaleString()} reporting weeks.
+          </p>
+          <p>
+            {preview.data.first_report || 'No reports in range'}
+            {preview.data.last_report ? ` → ${preview.data.last_report}` : ''}
+          </p>
+          <p>
+            Latest numeric source report: <strong>{preview.data.latest_source_report}</strong>
+          </p>
+          {preview.data.historical && (
+            <p className="notice">
+              Historical source · latest report is over 30 days old. These are not current active
+              cases.
+            </p>
+          )}
+          <span className="badge unassessed">Unassessed</span>
+          <p className="muted">{preview.data.note}</p>
+        </section>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -430,7 +467,7 @@ function FeedForm({ feed, saved }: { feed?: Feed; saved: (feed: Feed) => void })
           Boolean(catalog.error || locations.error)
         }
       >
-        {busy ? 'Saving…' : feed ? 'Save feed' : 'Connect feed'}
+        {busy ? 'Working…' : feed ? 'Save feed' : preview ? 'Connect feed' : 'Preview reports'}
       </button>
     </form>
   )

@@ -1,4 +1,4 @@
-import type { Location, Severity } from './types'
+import type { Assessment, Location, Severity } from './types'
 export type Outbreak = {
   id: number
   title: string
@@ -50,7 +50,7 @@ export type Feed = {
   country_code: string
   location_id: number
   location_name: string
-  severity: Severity
+  severity: Assessment
   start_date: string
   interval_minutes: number
   enabled: boolean

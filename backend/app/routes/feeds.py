@@ -9,7 +9,8 @@ from app.auth.security import analyst, current_user
 from app.db.session import get_db
 from app.models.models import Feed, FeedRun, User, WorkerHeartbeat
 from app.schemas.surveillance import FeedInput
-from app.services.feeds import catalog, sync_feed, validate_feed
+from app.services import feeds as feed_service
+from app.services.feeds import catalog, parse_reports, sync_feed, validate_feed
 from app.services.surveillance import utcnow
 
 router = APIRouter(prefix="/feeds", tags=["feeds"], dependencies=[Depends(current_user)])
@@ -68,6 +69,28 @@ def worker_status(db: Session = Depends(get_db)):
 @router.get("/catalog", dependencies=[Depends(analyst)])
 def providers():
     return catalog()
+
+
+@router.post("/preview", dependencies=[Depends(analyst)])
+def preview(data: FeedInput, db: Session = Depends(get_db)):
+    validate_feed(db, data)
+    try:
+        observations, latest = parse_reports(feed_service.load_who_rows(), data.country_code, data.start_date)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {
+        "records": len(observations),
+        "reported_cases": sum(observations.values()),
+        "first_report": min(observations) if observations else None,
+        "last_report": max(observations) if observations else None,
+        "latest_source_report": latest,
+        "historical": (utcnow().date() - latest).days > 30,
+        "reporting_period_days": 7,
+        "geographic_scope": "national",
+        "assessment": "unassessed",
+        "source": "WHO COVID-19 weekly country reports",
+        "note": "Source snapshot; existing observations and overlaps are checked again during sync. No data has been saved.",
+    }
 
 
 @router.get("")

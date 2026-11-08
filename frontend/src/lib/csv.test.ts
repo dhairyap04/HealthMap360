@@ -34,3 +34,22 @@ describe('full-file CSV ingestion', () => {
     expect(validateRows(csv.rows, guessMapping(csv.fields))[0].isValid).toBe(false)
   })
 })
+
+describe('optional analyst assessment', () => {
+  it('accepts a file without severity or an empty assessment', () => {
+    for (const text of [
+      'date,location,disease,case_count\n2026-11-01,Edmonton,influenza,3',
+      'date,location,disease,case_count,severity\n2026-11-01,Edmonton,influenza,3,',
+      'date,location,disease,case_count,severity\n2026-11-01,Edmonton,influenza,3,unassessed',
+    ]) {
+      const csv = parseCsvText(text)
+      expect(validateRows(csv.rows, guessMapping(csv.fields))[0].isValid).toBe(true)
+    }
+  })
+  it('rejects an invented assessment rather than silently replacing it', () => {
+    const csv = parseCsvText(
+      'date,location,disease,case_count,severity\n2026-11-01,Edmonton,influenza,3,urgent',
+    )
+    expect(validateRows(csv.rows, guessMapping(csv.fields))[0].isValid).toBe(false)
+  })
+})

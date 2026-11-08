@@ -8,8 +8,12 @@ export type Location = {
   population: number | null
   administrative_level: string | null
   country_code: string | null
+  region_code: string | null
+  geographic_scope: GeographicScope | 'unclassified'
 }
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
+export type Assessment = Severity | 'unassessed'
+export type GeographicScope = 'local' | 'regional' | 'national'
 export type Observation = {
   id: number
   location_id: number
@@ -17,7 +21,7 @@ export type Observation = {
   date: string
   disease: string
   case_count: number
-  severity: Severity
+  severity: Assessment
   source: string | null
   reporting_period_days: 1 | 7
   outbreak_id: number | null
@@ -32,6 +36,8 @@ export type Resource = {
   allocated_date: string | null
 }
 export type Filters = {
+  geographic_scope?: GeographicScope
+  time_window?: 'last28' | 'latest' | 'historical'
   date_from: string
   date_to: string
   disease: string
@@ -46,6 +52,16 @@ export const emptyFilters: Filters = {
   location_id: '',
 }
 export type Summary = {
+  view: {
+    geographic_scope: GeographicScope
+    time_window: 'last28' | 'latest' | 'historical'
+    date_from: string | null
+    date_to: string | null
+    latest_report_date: string | null
+    historical: boolean
+    reporting_periods: number[]
+    sources: string[]
+  }
   total_cases: number
   observations: number
   affected_locations: number
@@ -60,7 +76,9 @@ export type Summary = {
     latitude: number
     longitude: number
     cases: number
-    severity: Severity
+    first_report: string
+    latest_report: string
+    severity: Assessment
   }[]
 }
 export type ImportBatch = {
@@ -82,5 +100,6 @@ export type PlaceResult = {
   administrative_level: string
   country: string
   country_code?: string | null
+  region_code?: string | null
   region: string
 }

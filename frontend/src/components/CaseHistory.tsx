@@ -4,6 +4,7 @@ import { useApi } from '../lib/useApi'
 import LoadState from './LoadState'
 
 type Snapshot = {
+  severity?: string
   case_count: number
   source: string | null
   reporting_period_days: number
@@ -42,6 +43,16 @@ export default function CaseHistory({ observation }: { observation: Observation 
                   {change.before?.case_count.toLocaleString() ?? '—'} →{' '}
                   {change.after?.case_count.toLocaleString() ?? 'Removed'} reported cases
                 </p>
+                <p className="muted">
+                  Assessment: {change.before?.severity || '—'} →{' '}
+                  {change.after?.severity || 'Removed'}
+                </p>
+                {change.action === 'assessment_reset' && (
+                  <p className="muted">
+                    Legacy feed default cleared. The original label is retained here; reported
+                    counts are unchanged.
+                  </p>
+                )}
                 {change.after && (
                   <p className="muted">
                     {change.after.reporting_period_days === 7 ? 'Weekly' : 'Daily'} report ·{' '}

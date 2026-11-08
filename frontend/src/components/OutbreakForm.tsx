@@ -75,7 +75,7 @@ export default function OutbreakForm({
           </select>
         </label>
         <label>
-          Priority
+          Response priority
           <select name="priority" defaultValue={outbreak?.priority || 'medium'}>
             {['low', 'medium', 'high', 'critical'].map((value) => (
               <option key={value}>{value}</option>

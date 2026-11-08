@@ -1,10 +1,11 @@
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Severity = Literal["low", "medium", "high", "critical"]
+Assessment = Literal["unassessed", "low", "medium", "high", "critical"]
 
 
 class LocationInput(BaseModel):
@@ -14,6 +15,13 @@ class LocationInput(BaseModel):
     population: int | None = Field(default=None, ge=0, le=2147483647)
     administrative_level: str | None = Field(default=None, max_length=100)
     country_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    region_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}-[A-Z0-9]{1,3}$")
+
+    @model_validator(mode="after")
+    def region_matches_country(self):
+        if self.region_code and self.country_code and not self.region_code.startswith(self.country_code + "-"):
+            raise ValueError("Region identifier must belong to the selected country")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -25,6 +33,7 @@ class LocationInput(BaseModel):
 
 
 class LocationOut(LocationInput):
+    geographic_scope: str
     model_config = ConfigDict(from_attributes=True)
     id: int
 
@@ -34,7 +43,7 @@ class CaseInput(BaseModel):
     date: date
     disease: str = Field(min_length=1, max_length=120)
     case_count: int = Field(ge=0, le=2147483647)
-    severity: Severity
+    severity: Assessment = "unassessed"
     source: str | None = Field(default=None, max_length=300)
     reporting_period_days: Literal[1, 7] = 1
 
