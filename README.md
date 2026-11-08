@@ -194,6 +194,14 @@ Due jobs are claimed with durable five-minute leases. Interrupted runs are recor
 
 **Observation provenance:** Reports displays daily/weekly periods, investigation links, sources and a History action. New imports, analyst corrections, feed revisions and link changes are audited with before/after values. Old observations retain their original values and default daily period. Migration 0005 clears legacy feed-derived assessment defaults to unassessed, records their original labels in before/after audit entries, and preserves manually owned labels and all counts. History explains these resets. Back up existing deployments before upgrading. The migration refuses a downgrade while unassessed observations exist rather than inventing replacement labels.
 
+## Regional analyst weekly review
+
+The next iteration targets regional public-health analysts in Alberta. **Weekly review** compares two seven-day reported-case windows for one disease, with explicit coverage/source/cadence checks, per-area totals and links into existing investigations. **Settings → Edit location → Optional details** records population reference year, source URL and matching-area confirmation; only complete same-year reporting produces a crude reported-case rate per 100,000. Legacy population estimates remain unconfirmed. Migration `0010` preserves existing data and audits subsequent denominator edits.
+
+The review can load a separate read-only **PHAC FluWatch+ provincial laboratory test-positivity** indicator from the official download. Tests and detections are never imported as cases. It shows the common source week, missing values, retrieval time, definitions and failure guidance; it is on-demand with a 15-minute cache. It is not a scheduled provincial case feed. Private JSON exports include the evidence and optional unsaved analyst notes. Public publication still requires administrator review.
+
+See [product direction and pilot acceptance plan](docs/PRODUCT_DIRECTION.md) for scope, interpretation rules and unperformed user research. A real Alberta incident-case connector, partner recruitment, interviews and user acceptance are external follow-up work; none is represented as complete.
+
 ## Remaining product decisions
 
 The implemented next iteration covers a WHO live connector, scheduled syncs, in-app threshold alerts and investigation tracking. Further product work can add additional local and national adapters, pathogen-specific outbreak attribution, population-based incidence, resource transfer histories, self-service verified email delivery, centralized authentication, external notification delivery, and hosted monitoring integration. Weekly report totals must not be interpreted as daily incidence or active infection estimates.

@@ -90,12 +90,17 @@ export default function LocationEditor({
       country_code: selected.country_code || null,
       region_code: fields.region_code || selected.region_code || null,
       population: fields.population ? Number(fields.population) : null,
+      population_year: fields.population_year ? Number(fields.population_year) : null,
+      population_source: fields.population_source || null,
+      population_area_confirmed: fields.population_area_confirmed === 'on',
       administrative_level:
-        fields.geographic_scope === 'national'
-          ? 'country'
-          : fields.geographic_scope === 'regional'
-            ? 'state'
-            : 'city',
+        location && fields.geographic_scope === location.geographic_scope
+          ? location.administrative_level
+          : fields.geographic_scope === 'national'
+            ? 'country'
+            : fields.geographic_scope === 'regional'
+              ? 'state'
+              : 'city',
     }
     setSaving(true)
     onBusyChange(true)
@@ -329,6 +334,43 @@ export default function LocationEditor({
                   disabled={saving}
                 />
               </label>
+              <label>
+                Population reference year
+                <input
+                  name="population_year"
+                  type="number"
+                  min={1900}
+                  max={new Date().getFullYear()}
+                  step={1}
+                  defaultValue={location?.population_year ?? ''}
+                  disabled={saving}
+                />
+              </label>
+              <label>
+                Population source URL
+                <input
+                  name="population_source"
+                  type="url"
+                  maxLength={500}
+                  defaultValue={location?.population_source ?? ''}
+                  placeholder="https://…"
+                  disabled={saving}
+                />
+              </label>
+              <label className="check-option">
+                <input
+                  name="population_area_confirmed"
+                  type="checkbox"
+                  defaultChecked={location?.population_area_confirmed ?? false}
+                  disabled={saving}
+                />
+                I verified that this population covers exactly this reporting area.
+              </label>
+              <small className="muted">
+                Weekly review shows reported cases per 100,000 only with complete reporting and a
+                confirmed population for that same year. Existing population estimates are
+                unconfirmed until reviewed.
+              </small>
               <label>
                 Region identifier (for province or state outlines)
                 <input

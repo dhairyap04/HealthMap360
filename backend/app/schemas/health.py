@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints, field_validator, model_validator
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Severity = Literal["low", "medium", "high", "critical"]
@@ -13,9 +13,26 @@ class LocationInput(BaseModel):
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
     population: int | None = Field(default=None, ge=0, le=2147483647)
+    population_year: int | None = Field(default=None, ge=1900, le=2100)
+    population_source: str | None = Field(default=None, max_length=500)
+    population_area_confirmed: bool = False
     administrative_level: str | None = Field(default=None, max_length=100)
     country_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
     region_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}-[A-Z0-9]{1,3}$")
+
+    @model_validator(mode="after")
+    def denominator_metadata(self):
+        if self.population_year and self.population_year > date.today().year:
+            raise ValueError("Population year cannot be in the future")
+        if self.population_source:
+            self.population_source = str(HttpUrl(self.population_source))
+            if len(self.population_source) > 500:
+                raise ValueError("Population source URL must be at most 500 characters")
+        if self.population_area_confirmed and not (self.population and self.population_year and self.population_source):
+            raise ValueError(
+                "Confirming population coverage requires a positive population, reference year and source URL"
+            )
+        return self
 
     @model_validator(mode="after")
     def region_matches_country(self):

@@ -55,3 +55,32 @@ schedule/off-host retention, actual external monitoring, independent privacy and
 security/accessibility review, pilot user acceptance and a verified regional data
 adapter remain operator/external/product dependencies. No mocked connector,
 notification delivery or regulatory/clinical certification is claimed.
+
+## Regional weekly review iteration — 2026-11-08
+
+The project owner selected regional public-health analysts in Alberta as the
+intended pilot audience. This is not an institutional partnership or evidence of
+user acceptance. Product scope, discovery questions and unmeasured acceptance
+criteria are recorded in PRODUCT_DIRECTION.md.
+
+Migration 0010 was applied to a backup-protected native preview and preserved all
+11 locations, 156 observations, 3,190,006 reported cases, 296 case revisions,
+one feed and existing publication/history records. Foreign-key checks passed.
+Existing population estimates remained unconfirmed. Regression testing caught and
+fixed SQLite AUTOINCREMENT loss during table reconstruction; a migration test now
+also preserves a previously deleted high location ID. The location editor retains
+existing province/state designations when only denominator details change.
+
+An actual TLS-verified PHAC CSV download and authenticated native API request
+verified Alberta laboratory context (week ending 2026-10-31, COVID-19 test
+positivity 3.9%; unavailable influenza/RSV remain missing). This is distinct from
+deterministic fixture tests and does not establish an Alberta incident-case
+feed or guarantee continued source availability. No laboratory values were written
+to Case, alert, investigation or public-publication tables.
+
+Local checks: 138 SQLite tests passed; PostgreSQL passed 136 tests with two
+SQLite-specific checks skipped. Frontend production build, lint, formatting and
+15 unit tests passed. Eight Playwright workflows passed, including denominator editing, private
+evidence export, source failure isolation, investigation handoff and mobile
+layout. CI status is provided in the implementation handoff. Pilot interviews, partner agreements, permitted Alberta
+case exports, operational deployment and measured impact remain external work.

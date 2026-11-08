@@ -95,6 +95,18 @@ export default function Feeds() {
           </button>
         )}
       </div>
+      <section className="panel">
+        <h2>Alberta regional pilot</h2>
+        <p>
+          Weekly review can retrieve official PHAC provincial laboratory test positivity as separate
+          context. It does not create reported case observations.
+        </p>
+        <Link to="/review">Open weekly review →</Link>
+        <p className="muted">
+          Alberta case reports still require a reviewed, permitted incident-case CSV. An automatic
+          Alberta case connector has not been verified.
+        </p>
+      </section>
       <section className="panel source-intro">
         <div>
           <span className="status-pill">LIVE CONNECTOR</span>

@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, Link } from 'react-route
 import { lazy, Suspense, useState } from 'react'
 import { useAuth } from './auth/context'
 import { errorMessage } from './lib/api'
+const WeeklyReview = lazy(() => import('./pages/WeeklyReview'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const MapPage = lazy(() => import('./pages/Map'))
 const Reports = lazy(() => import('./pages/Reports'))
@@ -62,6 +63,7 @@ export default function App() {
         <nav aria-label="Main navigation">
           {[
             ['/', 'Overview', '◫'],
+            ['/review', 'Weekly review', '◷'],
             ['/map', 'Outbreak map', '◎'],
             ['/reports', 'Reports & data', '▤'],
             ['/outbreaks', 'Investigations', '◉'],
@@ -116,6 +118,7 @@ export default function App() {
           >
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/review" element={<WeeklyReview />} />
               <Route path="/map" element={<MapPage />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/resources" element={<Resources />} />

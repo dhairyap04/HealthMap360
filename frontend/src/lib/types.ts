@@ -14,6 +14,9 @@ export type Location = {
   latitude: number
   longitude: number
   population: number | null
+  population_year: number | null
+  population_source: string | null
+  population_area_confirmed: boolean
   administrative_level: string | null
   country_code: string | null
   region_code: string | null

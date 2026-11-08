@@ -10,8 +10,10 @@ import LoadState from './LoadState'
 export default function OutbreakForm({
   outbreak,
   saved,
+  initial,
 }: {
   outbreak?: Outbreak
+  initial?: { title: string; disease: string; started_on: string; location_id: number }
   saved: (id: number) => void
 }) {
   const today = useWorkspaceDate()
@@ -53,7 +55,7 @@ export default function OutbreakForm({
           name="title"
           required
           maxLength={200}
-          defaultValue={outbreak?.title}
+          defaultValue={outbreak?.title || initial?.title}
           placeholder="e.g. Influenza response · Edmonton"
         />
       </label>
@@ -63,7 +65,7 @@ export default function OutbreakForm({
           name="disease"
           required
           maxLength={120}
-          defaultValue={outbreak?.disease}
+          defaultValue={outbreak?.disease || initial?.disease}
           placeholder="e.g. influenza"
         />
       </label>
@@ -93,7 +95,7 @@ export default function OutbreakForm({
             type="date"
             required
             key={today}
-            defaultValue={outbreak?.started_on || today}
+            defaultValue={outbreak?.started_on || initial?.started_on || today}
           />
         </label>
         <label>
@@ -134,7 +136,10 @@ export default function OutbreakForm({
                 type="checkbox"
                 name="location_ids"
                 value={location.id}
-                defaultChecked={outbreak?.locations.some((l) => l.id === location.id)}
+                defaultChecked={
+                  outbreak?.locations.some((l) => l.id === location.id) ||
+                  initial?.location_id === location.id
+                }
               />
               {location.name}
               {location.archived_at ? ' (archived)' : ''}

@@ -1,7 +1,6 @@
 # Regional source assessment — 2026-11-07
 
-The implementation retains WHO's weekly country-case connector. No regional live
-connector is claimed by this iteration.
+The implementation retains WHO's weekly country-case connector. The weekly review now also offers read-only provincial PHAC laboratory context; no automatic regional reported-case connector is claimed.
 
 ## Alberta respiratory surveillance
 
@@ -51,3 +50,19 @@ review and actual-download integration checks. They must not be labeled as cases
 Next external dependency: identify an official, reusable Alberta incident-case
 export, or design and validate a typed PHAC metric adapter. No mock fixture is
 presented as proof of either integration.
+
+## PHAC laboratory context — implementation verified 2026-11-08
+
+The official Explore page JavaScript references this downloadable provincial CSV:
+https://health-infobase.canada.ca/src/data/respiratory-virus-detections/download/RVD_WeeklyData.csv
+
+An actual TLS-verified download returned 720 records with province, reporting date,
+virus, tests, detections and percent-positive fields. The adapter selects exact
+province identifiers and the aggregate Influenza series (never sums aggregate and
+subtypes). It shows only COVID-19, Influenza and RSV at one common source week.
+At verification, Alberta's latest included week was 2026-10-31: 4,639 tests,
+181 SARS-CoV-2 detections and 3.9% positive. Influenza and RSV were unavailable for
+that area/week and stay unavailable. These are a dated integration observation,
+not a freshness or future-availability promise. The live adapter performs no case
+writes, interpolation, public publication or background scheduling. Tests use
+deterministic source fixtures separately from this actual-download verification.

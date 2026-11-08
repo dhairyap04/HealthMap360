@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
-from app.routes import alerts, auth, data, feeds, health, imports, outbreaks, publications
+from app.routes import alerts, auth, data, feeds, health, imports, outbreaks, publications, review
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.2.0")
@@ -71,6 +71,7 @@ app.include_router(outbreaks.router)
 app.include_router(feeds.router)
 app.include_router(publications.router)
 app.include_router(publications.public)
+app.include_router(review.router)
 
 
 @app.get("/")

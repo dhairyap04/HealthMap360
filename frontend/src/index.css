@@ -1562,3 +1562,10 @@ td > small {
     flex-shrink: 0;
   }
 }
+
+/* Radix wraps the selected value in a span; allow it to shrink beside the chevron. */
+.filter-trigger > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}

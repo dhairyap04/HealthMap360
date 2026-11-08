@@ -89,7 +89,9 @@ def create_location(data: LocationInput, db: Session = Depends(get_db)):
 
 
 @router.put("/locations/{location_id}", response_model=LocationOut, dependencies=[Depends(analyst)])
-def update_location(location_id: int, data: LocationInput, db: Session = Depends(get_db)):
+def update_location(
+    location_id: int, data: LocationInput, user: User = Depends(analyst), db: Session = Depends(get_db)
+):
     location = db.get(Location, location_id)
     if not location:
         raise HTTPException(404, "Location not found")
@@ -100,6 +102,9 @@ def update_location(location_id: int, data: LocationInput, db: Session = Depends
             422, "This location is linked to a national feed. Its country and geography must stay unchanged."
         )
     lock_locations(db, [location_id])
+    location = db.get(Location, location_id, populate_existing=True)
+    if not location:
+        raise HTTPException(404, "Location not found")
     if db.scalar(select(Case.id).where(Case.location_id == location_id).limit(1)) and any(
         getattr(location, key) != getattr(data, key)
         for key in ("latitude", "longitude", "administrative_level", "country_code", "region_code")
@@ -108,8 +113,20 @@ def update_location(location_id: int, data: LocationInput, db: Session = Depends
             409,
             "Reporting geography is in use. Create a separate reporting area and review assignments instead of moving existing reports.",
         )
+    denominator_fields = ("population", "population_year", "population_source", "population_area_confirmed")
+    before_population = {key: getattr(location, key) for key in denominator_fields}
     for key, value in data.model_dump().items():
         setattr(location, key, value)
+    after_population = {key: getattr(location, key) for key in denominator_fields}
+    if before_population != after_population:
+        db.add(
+            LocationEvent(
+                location_id=location.id,
+                user_id=user.id,
+                action="population_update",
+                snapshot={"before": before_population, "after": after_population},
+            )
+        )
     location.name_key = normalize_name(data.name)
     return save(db, location)
 

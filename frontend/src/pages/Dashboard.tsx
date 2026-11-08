@@ -34,6 +34,14 @@ export default function Dashboard() {
           View reports ↗
         </Link>
       </div>
+      <section className="panel">
+        <strong>From evidence to follow-up</strong>
+        <p>
+          Bring trusted reports together, review changes, coordinate investigations and communicate
+          reviewed findings.
+        </p>
+        <Link to="/review">Prepare a weekly surveillance review →</Link>
+      </section>
       <MonitoringStrip />
       <Filters value={filters} onChange={setFilters} />
       <LoadState loading={loading} error={error} retry={reload} />

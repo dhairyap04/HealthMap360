@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import path from 'node:path'
+import { readFile } from 'node:fs/promises'
 
 test('complete public health workspace workflow', async ({ page }) => {
   const errors: string[] = []
@@ -119,9 +120,9 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByRole('link', { name: 'Overview', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
   await page.screenshot({ path: 'test-results/dashboard-mobile.png', fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  )
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await page.getByRole('button', { name: 'New here? Create an account' }).click()
   await page.getByLabel('Username', { exact: true }).fill('public_browser')
@@ -583,9 +584,9 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
   await page.getByRole('link', { name: 'Canada →', exact: true }).click()
   await expect(page).toHaveURL(/public\/locations\//)
   await page.setViewportSize({ width: 390, height: 844 })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  )
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
   await page.screenshot({ path: 'test-results/public-report-mobile.png', fullPage: true })
   await page.getByRole('link', { name: 'Analyst sign in', exact: true }).click()
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
@@ -663,4 +664,104 @@ test('location deletion and reversible archive preserve reporting history', asyn
   await expect(page.locator('.location-list')).toContainText(linked.name)
   const reports = await page.request.get(`/api/cases?location_id=${linked.id}`, { headers })
   expect(JSON.stringify(await reports.json())).toContain('42')
+})
+
+test('regional weekly review compares evidence, qualifies rates and hands off to investigations', async ({
+  page,
+}) => {
+  await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
+  await page.goto('/')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
+  const token = await page.evaluate(() => sessionStorage.getItem('healthmap360-token'))
+  const headers = { Authorization: `Bearer ${token}` }
+  const response = await page.request.post('/api/locations', {
+    headers,
+    data: {
+      name: 'Alberta weekly review fixture',
+      latitude: 53,
+      longitude: -113,
+      country_code: 'CA',
+      region_code: 'CA-AB',
+      administrative_level: 'province',
+    },
+  })
+  expect(response.status()).toBe(201)
+  const area = await response.json()
+  for (const [date, count] of [
+    ['2025-10-18', 100],
+    ['2025-10-25', 150],
+  ] as const) {
+    expect(
+      (
+        await page.request.post('/api/cases', {
+          headers,
+          data: {
+            location_id: area.id,
+            date,
+            disease: 'influenza',
+            case_count: count,
+            reporting_period_days: 7,
+            source: 'Browser review fixture',
+          },
+        })
+      ).status(),
+    ).toBe(201)
+  }
+  const url = `/#/review?location_id=${area.id}&disease=influenza&date_to=2025-10-25`
+  await page.goto(url)
+  const region = page.getByRole('region', { name: `${area.name} weekly review`, exact: true })
+  await expect(region).toContainText('+50 reported cases')
+  await expect(region).toContainText('(+50%)')
+  await expect(region).toContainText('Add a population, reference year')
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page
+    .getByRole('row')
+    .filter({ hasText: area.name })
+    .getByRole('button', { name: 'Edit', exact: true })
+    .click()
+  await page.getByText('Optional details', { exact: true }).click()
+  await page.getByLabel('Population', { exact: true }).fill('1000000')
+  await page.getByLabel('Population reference year').fill('2025')
+  await page.getByLabel('Population source URL').fill('https://example.com/population')
+  await page
+    .getByRole('checkbox', {
+      name: 'I verified that this population covers exactly this reporting area.',
+    })
+    .check()
+  await page.getByRole('button', { name: 'Save location', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.goto(url)
+  await expect(region).toContainText('Reported cases per 100,000 people: 15')
+  await page.getByLabel('Analyst notes').fill('Review testing changes before publication.')
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export private review', exact: true }).click()
+  const exported = await download
+  expect(exported.suggestedFilename()).toBe('healthmap360-private-review-2025-10-25.json')
+  const evidence = JSON.parse(await readFile((await exported.path())!, 'utf8'))
+  expect(evidence.status).toBe('private_working_review_not_approved_for_publication')
+  expect(evidence.analyst_notes).toBe('Review testing changes before publication.')
+  expect(evidence.areas[0].rate.reported_cases_per_100000).toBe(15)
+  await page.route('**/api/review/laboratory?*', (route) =>
+    route.fulfill({ status: 502, json: { detail: 'Laboratory source temporarily unavailable' } }),
+  )
+  await page.getByRole('button', { name: 'Load PHAC laboratory context' }).click()
+  await expect(page.getByRole('alert')).toContainText('Laboratory source temporarily unavailable')
+  await expect(region).toContainText('+50 reported cases')
+  await region.getByRole('button', { name: 'Start investigation', exact: true }).click()
+  await expect(page.getByLabel('Disease', { exact: true })).toHaveValue('influenza')
+  await expect(page.getByRole('checkbox', { name: area.name, exact: true })).toBeChecked()
+  await page.getByRole('button', { name: 'Save investigation', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: `${area.name} · influenza review`, exact: true }),
+  ).toBeVisible()
+  await page.goto(url)
+  await expect(region).toContainText('Existing open investigations')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
+  await page.screenshot({ path: 'test-results/weekly-review-mobile.png', fullPage: true })
 })
