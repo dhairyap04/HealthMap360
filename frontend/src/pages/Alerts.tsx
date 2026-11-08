@@ -1,3 +1,4 @@
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/context'
@@ -11,9 +12,15 @@ import { useApi } from '../lib/useApi'
 
 export default function Alerts() {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const [evidenceId, setEvidenceId] = useState<number | null>(null)
+  const evidence = useApi<
+    { as_of: string; state: string; value: number | null; complete: boolean; periods: number[] }[]
+  >(evidenceId ? `/alerts/${evidenceId}/evaluations` : null)
   const writable = user?.role !== 'public'
   const [filter, setFilter] = useState('open')
-  const alerts = useApi<Alert[]>(`/alerts${query({ status: filter })}`)
+  const [historical, setHistorical] = useState(false)
+  const alerts = useApi<Alert[]>(`/alerts${query({ status: filter, historical })}`)
   const rules = useApi<AlertRule[]>('/alert-rules')
   const locations = useApi<Location[]>('/locations')
   const [editing, setEditing] = useState<AlertRule | 'new' | null>(null)
@@ -35,6 +42,7 @@ export default function Alerts() {
       threshold: Number(form.get('threshold')),
       window_days: Number(form.get('window_days')),
       severity: form.get('severity'),
+      geographic_scope: form.get('geographic_scope'),
       enabled: form.get('enabled') === 'on',
     }
     setBusy(true)
@@ -50,6 +58,20 @@ export default function Alerts() {
       setStatus('Alert rule saved and evaluated against current reports.')
     } catch (error) {
       setError(errorMessage(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function investigate(id: number) {
+    setBusy(true)
+    setError('')
+    try {
+      const result = await api<{ outbreak_id: number }>(`/alerts/${id}/investigation`, {
+        method: 'POST',
+      })
+      navigate(`/outbreaks/${result.outbreak_id}`)
+    } catch (e) {
+      setError(errorMessage(e))
     } finally {
       setBusy(false)
     }
@@ -71,10 +93,14 @@ export default function Alerts() {
     setBusy(true)
     setError('')
     try {
-      const result = await api<{ created: number }>(`/alerts/evaluate${query({ as_of: asOf })}`, {
-        method: 'POST',
-      })
+      const result = await api<{ created: number; historical: boolean }>(
+        `/alerts/evaluate${query({ as_of: asOf })}`,
+        {
+          method: 'POST',
+        },
+      )
       alerts.reload()
+      setHistorical(result.historical)
       setStatus(`Evaluation complete for ${asOf}: ${result.created} new alerts.`)
     } catch (error) {
       setError(errorMessage(error))
@@ -85,6 +111,14 @@ export default function Alerts() {
   const current = editing && editing !== 'new' ? editing : null
   return (
     <>
+      <label className="check-option">
+        <input
+          type="checkbox"
+          checked={historical}
+          onChange={(e) => setHistorical(e.target.checked)}
+        />
+        Historical exercises (separate from current alerts)
+      </label>
       <div className="page-heading">
         <div>
           <p className="eyebrow">SIGNALS & FOLLOW-UP</p>
@@ -169,6 +203,25 @@ export default function Alerts() {
                   <strong>{alert.value.toLocaleString()}</strong> reported cases · threshold{' '}
                   {alert.threshold.toLocaleString()}
                 </p>
+                <p className="muted">
+                  Reporting state: {alert.data_state.replaceAll('_', ' ')} · latest report:{' '}
+                  {alert.latest_report_date || 'None'}.{' '}
+                  {alert.is_historical
+                    ? 'Historical exercise.'
+                    : 'Current incident; missing data does not imply improvement.'}
+                </p>
+                <div className="actions">
+                  <button onClick={() => setEvidenceId(alert.id)}>
+                    Review evaluation evidence
+                  </button>
+                  {alert.outbreak_id ? (
+                    <Link to={`/outbreaks/${alert.outbreak_id}`}>View investigation →</Link>
+                  ) : (
+                    <button disabled={busy} onClick={() => void investigate(alert.id)}>
+                      Create follow-up investigation
+                    </button>
+                  )}
+                </div>
                 {alert.resolution && <p className="muted">{alert.resolution}</p>}
                 {writable && alert.status !== 'resolved' && (
                   <div className="actions">
@@ -225,7 +278,9 @@ export default function Alerts() {
                           'Each location'}
                       </td>
                       <td>{rule.threshold} reported cases</td>
-                      <td>{rule.window_days} days</td>
+                      <td>
+                        {rule.window_days} days · {rule.geographic_scope}
+                      </td>
                       <td>{rule.enabled ? 'Enabled' : 'Paused'}</td>
                       {writable && (
                         <td>
@@ -248,6 +303,21 @@ export default function Alerts() {
             <p className="empty">No rules configured.</p>
           ))}
       </section>
+      {evidenceId && (
+        <Dialog title="Alert evaluation evidence" close={() => setEvidenceId(null)}>
+          <LoadState loading={evidence.loading} error={evidence.error} retry={evidence.reload} />
+          <ul>
+            {evidence.data?.map((row) => (
+              <li key={row.as_of}>
+                {row.as_of} · {row.state} ·{' '}
+                {row.value === null ? 'No reports' : row.value.toLocaleString()} ·{' '}
+                {row.complete ? 'Complete window' : 'Incomplete window'} · report periods{' '}
+                {row.periods.join(', ') || 'unknown'} days
+              </li>
+            ))}
+          </ul>
+        </Dialog>
+      )}
       {editing && (
         <Dialog
           title={editing === 'new' ? 'New alert rule' : 'Edit alert rule'}
@@ -268,6 +338,14 @@ export default function Alerts() {
                 defaultValue={current?.disease || ''}
                 placeholder="Blank evaluates each disease separately"
               />
+            </label>
+            <label>
+              Reporting geography
+              <select name="geographic_scope" defaultValue={current?.geographic_scope || 'local'}>
+                <option value="local">Local</option>
+                <option value="regional">Regional</option>
+                <option value="national">National</option>
+              </select>
             </label>
             <label>
               Location scope

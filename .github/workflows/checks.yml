@@ -63,6 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: ci-disposable-database-password
+      APP_DATABASE_PASSWORD: ci-disposable-application-password
       SECRET_KEY: ci-disposable-signing-secret-only-1234567890
     steps:
       - uses: actions/checkout@v4

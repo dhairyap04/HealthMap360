@@ -16,11 +16,12 @@ from app.models.models import Case, ImportBatch, Location, User
 from app.routes.data import normalize_name
 from app.schemas.health import CaseInput, LocationInput
 from app.services.alerts import evaluate_alerts
+from app.services.observations import classify_provenance, lock_locations, validate_intervals
 from app.services.surveillance import revision
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 REQUIRED = ("date", "location", "disease", "case_count")
-OPTIONAL = ("severity", "source", "latitude", "longitude", "reporting_period_days")
+OPTIONAL = ("metric", "severity", "source", "latitude", "longitude", "reporting_period_days")
 
 
 @router.get("")
@@ -130,6 +131,7 @@ def import_csv(
                 if len(date_value) != 10 or date_value[4] != "-" or date_value[7] != "-":
                     raise ValueError("Date must use YYYY-MM-DD")
                 observation = CaseInput(
+                    metric=get("metric") or "reported_cases",
                     location_id=location.id if location else 1,
                     date=date_value,
                     disease=get("disease"),
@@ -171,6 +173,7 @@ def import_csv(
                     errors.append({"row": row_number, "message": message})
         if not row_count:
             raise HTTPException(422, "CSV has no data rows")
+        lock_locations(db, [locations[key].id for key, _, _ in observations if key in locations])
         identities = [(locations[key].id, day, disease) for key, day, disease in observations if key in locations]
         existing = {}
         for offset in range(0, len(identities), 200):
@@ -215,8 +218,15 @@ def import_csv(
             db.add(location)
             locations[key] = location
         db.flush()
-        for (key, _, _), observation in observations.items():
-            record = Case(**{**observation.model_dump(), "location_id": locations[key].id})
+        records = [
+            Case(
+                **{**observation.model_dump(), "location_id": locations[key].id},
+                provenance=classify_provenance(observation.source),
+            )
+            for (key, _, _), observation in observations.items()
+        ]
+        validate_intervals(db, records)
+        for record in records:
             db.add(record)
             db.flush()
             revision(db, record, None, "import", user_id=user.id)

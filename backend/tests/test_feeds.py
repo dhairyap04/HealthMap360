@@ -66,12 +66,12 @@ def test_feed_sync_idempotence_revisions_and_weekly_export(client, auth, source,
     source[0]["New_cases"] = "20"
     revised = client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()
     assert revised["updated"] == 1
-    data = client.get("/cases", headers=auth["reader"]).json()["items"]
+    data = client.get("/cases", headers=auth["analyst"]).json()["items"]
     assert all(row["reporting_period_days"] == 7 and row["feed_id"] == feed["id"] for row in data)
-    assert client.get("/summary?geographic_scope=national", headers=auth["reader"]).json()["total_cases"] == 20
-    exported = client.get("/cases/export", headers=auth["reader"]).text
+    assert client.get("/summary?geographic_scope=national", headers=auth["analyst"]).json()["total_cases"] == 20
+    exported = client.get("/cases/export", headers=auth["analyst"]).text
     assert "reporting_period_days" in exported
-    assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["reader"]).json()) == 3
+    assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["analyst"]).json()) == 3
     with Session(database) as db:
         revisions = db.scalars(select(CaseRevision).where(CaseRevision.action == "feed_revision")).all()
         assert len(revisions) == 1
@@ -125,20 +125,20 @@ def test_negative_adjustments_fail_atomically_and_are_logged(client, auth, sourc
     with Session(database) as db:
         assert db.scalar(select(func.count(Case.id))) == 0
         assert db.scalar(select(func.count(CaseRevision.id))) == 0
-    assert client.get("/feeds", headers=auth["reader"]).json()[0]["last_error"]
+    assert client.get("/feeds", headers=auth["analyst"]).json()[0]["last_error"]
 
 
 def test_manual_corrections_are_not_overwritten(client, auth, source, connection):
     feed, _ = connection
     assert client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()["status"] == "success"
-    observation = client.get("/cases", headers=auth["reader"]).json()["items"][0]
+    observation = client.get("/cases", headers=auth["analyst"]).json()["items"][0]
     corrected = client.put(
         f"/cases/{observation['id']}", headers=auth["analyst"], json={**observation, "case_count": 9}
     )
     assert corrected.status_code == 200 and corrected.json()["feed_id"] is None
     result = client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()
     assert result["status"] == "failed" and "analyst-owned" in result["message"]
-    assert client.get("/summary?geographic_scope=national", headers=auth["reader"]).json()["total_cases"] == 21
+    assert client.get("/summary?geographic_scope=national", headers=auth["analyst"]).json()["total_cases"] == 21
 
 
 def test_pause_works_during_source_outage(client, auth, source, connection, monkeypatch):
@@ -154,20 +154,20 @@ def test_missing_counts_are_not_imported_as_zero(client, auth, source, connectio
     source[0]["New_cases"] = ""
     result = client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()
     assert result["imported"] == 1
-    rows = client.get("/cases", headers=auth["reader"]).json()["items"]
+    rows = client.get("/cases", headers=auth["analyst"]).json()["items"]
     assert len(rows) == 1 and rows[0]["case_count"] == 0
 
 
 def test_worker_processes_due_feeds_and_reports_heartbeat(client, auth, source, connection, database, monkeypatch):
     feed, _ = connection
     monkeypatch.setattr(worker, "SessionLocal", sessionmaker(database, expire_on_commit=False))
-    assert not client.get("/feeds/worker-status", headers=auth["reader"]).json()["online"]
+    assert not client.get("/feeds/worker-status", headers=auth["analyst"]).json()["online"]
     worker.run_once()
-    assert client.get("/feeds/worker-status", headers=auth["reader"]).json()["online"]
-    history = client.get(f"/feeds/{feed['id']}/runs", headers=auth["reader"]).json()
+    assert client.get("/feeds/worker-status", headers=auth["analyst"]).json()["online"]
+    history = client.get(f"/feeds/{feed['id']}/runs", headers=auth["analyst"]).json()
     assert len(history) == 1 and history[0]["status"] == "success"
     worker.run_once()
-    assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["reader"]).json()) == 1
+    assert len(client.get(f"/feeds/{feed['id']}/runs", headers=auth["analyst"]).json()) == 1
     with Session(database) as db:
         assert db.get(Feed, feed["id"]).lease_until is None
 
@@ -183,7 +183,7 @@ def test_preview_is_read_only_and_imports_never_take_feed_priority(client, auth,
         assert db.scalar(select(func.count(Case.id))) == 0
     assert client.post("/feeds/preview", headers=auth["reader"], json=payload).status_code == 403
     assert client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()["imported"] == 2
-    rows = client.get("/cases", headers=auth["reader"]).json()["items"]
+    rows = client.get("/cases", headers=auth["analyst"]).json()["items"]
     assert all(row["severity"] == "unassessed" for row in rows)
     # A deliberate assessment is retained when WHO revises its factual count.
     row = next(row for row in rows if row["case_count"] == 12)
@@ -191,7 +191,7 @@ def test_preview_is_read_only_and_imports_never_take_feed_priority(client, auth,
     assert review.status_code == 200 and review.json()["feed_id"] == feed["id"]
     source[0]["New_cases"] = "25"
     assert client.post(f"/feeds/{feed['id']}/sync", headers=auth["analyst"]).json()["updated"] == 1
-    revised = next(r for r in client.get("/cases", headers=auth["reader"]).json()["items"] if r["id"] == row["id"])
+    revised = next(r for r in client.get("/cases", headers=auth["analyst"]).json()["items"] if r["id"] == row["id"])
     assert revised["severity"] == "high" and revised["case_count"] == 25
 
 
@@ -214,7 +214,9 @@ def test_preview_checks_source_adjustments_missing_and_historical_data(client, a
 def test_feed_country_identity_cannot_be_changed_through_location_editor(client, auth, source, connection):
     feed, _ = connection
     location = next(
-        place for place in client.get("/locations", headers=auth["reader"]).json() if place["id"] == feed["location_id"]
+        place
+        for place in client.get("/locations", headers=auth["analyst"]).json()
+        if place["id"] == feed["location_id"]
     )
     for change in [{"administrative_level": "city"}, {"country_code": "US"}]:
         assert (

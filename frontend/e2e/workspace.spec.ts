@@ -129,7 +129,8 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Password', { exact: true }).fill('public-test-password')
   await page.getByRole('button', { name: 'Create account', exact: true }).click()
   await expect(page.getByText('Read access', { exact: false })).toBeVisible()
-  await page.getByRole('link', { name: 'Reports & data' }).click()
+  await expect(page.getByRole('heading', { name: 'Public health reports' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Reports & data' })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Import outbreak data' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
@@ -530,4 +531,65 @@ test('geography views isolate totals and show historical national boundaries', a
   await expect(page.getByRole('button', { name: 'Regional', exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/regional-map-mobile.png', fullPage: true })
   expect(errors).toEqual([])
+})
+
+test('publication review controls anonymous access and withdrawal', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('link', { name: 'Publication review', exact: true }).click()
+  await page.getByRole('button', { name: 'Prepare publication', exact: true }).click()
+  await page
+    .getByRole('combobox', { name: 'Reporting area', exact: true })
+    .selectOption({ label: 'Canada · national' })
+  await page.getByLabel('Disease', { exact: true }).fill('covid-19')
+  await page.getByLabel('First report date').fill('2021-01-01')
+  await page.getByLabel('Last report date').fill('2021-12-31')
+  await page.getByLabel('Public title', { exact: true }).fill('Historical Canada · browser fixture')
+  await page.getByLabel('Public reporting area name').fill('Canada')
+  await page
+    .getByLabel('Public summary')
+    .fill('Historical browser fixture for publication access testing; not live surveillance.')
+  await page
+    .getByLabel('Methodology and limitations')
+    .fill(
+      'Reported weekly totals for a historical browser fixture. Missing reports do not mean zero cases.',
+    )
+  await page.getByLabel('Public source name').fill('Historical browser fixture')
+  await page
+    .getByLabel('Source methodology URL')
+    .fill('https://data.who.int/dashboards/covid19/data')
+  await page.getByRole('button', { name: 'Create private draft', exact: true }).click()
+  await expect(page.locator('p.success')).toContainText('Private draft created')
+  await expect(page.getByRole('button', { name: 'Publish reviewed snapshot' })).toBeDisabled()
+  await page.getByRole('checkbox', { name: /I reviewed the source/ }).check()
+  await page.getByRole('button', { name: 'Publish reviewed snapshot' }).click()
+  await expect(page.locator('p.success')).toContainText('Snapshot published')
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+  await page.getByRole('link', { name: /View published reports without signing in/ }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Historical Canada · browser fixture' }),
+  ).toBeVisible()
+  await expect(page.locator('article strong').filter({ hasText: '3,189,913' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Investigations', exact: true })).toHaveCount(0)
+  expect((await page.request.get('/api/outbreaks/1')).status()).toBe(401)
+  await page.getByRole('link', { name: 'Canada →', exact: true }).click()
+  await expect(page).toHaveURL(/public\/locations\//)
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  await page.screenshot({ path: 'test-results/public-report-mobile.png', fullPage: true })
+  await page.getByRole('link', { name: 'Analyst sign in', exact: true }).click()
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('link', { name: 'Publication review', exact: true }).click()
+  await page.getByRole('button', { name: 'Withdraw publication', exact: true }).click()
+  await expect(page.locator('p.success')).toContainText('Publication withdrawn')
+  await page.getByRole('link', { name: /Open public reports/ }).click()
+  await expect(
+    page.getByRole('heading', { name: 'No published reports in this view' }),
+  ).toBeVisible()
 })

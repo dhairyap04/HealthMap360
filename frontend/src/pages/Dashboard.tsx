@@ -40,6 +40,12 @@ export default function Dashboard() {
       {data && (
         <>
           <ReportingContext view={data.view} />
+          {data.excluded_for_review > 0 && (
+            <p className="notice">
+              {data.excluded_for_review} conflicting observations excluded from totals. Review them
+              in Reports & data.
+            </p>
+          )}
           <div className="stats-grid">
             {[
               [
@@ -49,7 +55,6 @@ export default function Dashboard() {
               ],
               ['Affected locations', data.affected_locations, 'Locations with observations'],
               ['Diseases tracked', data.diseases, 'Distinct diseases in view'],
-              ['Resource units', data.resource_units, 'Current stock in selected geography'],
             ].map(([label, value, note]) => (
               <section className="stat" key={label}>
                 <p>{label}</p>

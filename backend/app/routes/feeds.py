@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth.security import analyst, current_user
+from app.auth.security import analyst
 from app.db.session import get_db
 from app.models.models import Feed, FeedRun, User, WorkerHeartbeat
 from app.schemas.surveillance import FeedInput
@@ -13,7 +13,7 @@ from app.services import feeds as feed_service
 from app.services.feeds import catalog, parse_reports, sync_feed, validate_feed
 from app.services.surveillance import utcnow
 
-router = APIRouter(prefix="/feeds", tags=["feeds"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/feeds", tags=["feeds"], dependencies=[Depends(analyst)])
 
 
 def feed_json(feed):

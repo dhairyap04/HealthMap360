@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 class UserLogin(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     password: str = Field(min_length=1, max_length=128)
+    otp: str = Field(default="", max_length=6)
 
     @field_validator("username", mode="before")
     @classmethod
@@ -36,6 +37,8 @@ class UserOut(BaseModel):
     username: str
     email: str
     role: Literal["public", "analyst", "admin"]
+    mfa_enabled: bool
+    mfa_required: bool
 
 
 class Token(BaseModel):
@@ -49,5 +52,6 @@ class RoleUpdate(BaseModel):
 
 
 class PasswordUpdate(BaseModel):
+    otp: str = Field(default="", max_length=6)
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=10, max_length=128)

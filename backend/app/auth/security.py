@@ -65,12 +65,16 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
 
 
 def analyst(user: User = Depends(current_user)):
+    if user.mfa_required:
+        raise HTTPException(403, "Administrator authenticator enrollment is required")
     if user.role not in ("analyst", "admin"):
         raise HTTPException(403, "An analyst or administrator account is required")
     return user
 
 
 def admin(user: User = Depends(current_user)):
+    if user.mfa_required:
+        raise HTTPException(403, "Administrator authenticator enrollment is required")
     if user.role != "admin":
         raise HTTPException(403, "An administrator account is required")
     return user

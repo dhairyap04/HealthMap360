@@ -6,8 +6,10 @@ services:
       POSTGRES_DB: healthmap360
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set APP_DATABASE_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./deploy/01-app-role.sh:/docker-entrypoint-initdb.d/01-app-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d healthmap360"]
       interval: 5s
@@ -17,8 +19,8 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres@db:5432/healthmap360
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      DATABASE_URL: postgresql+psycopg://healthmap_app@db:5432/healthmap360
+      DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set APP_DATABASE_PASSWORD}
       GEOCODING_URL: ${GEOCODING_URL:-https://nominatim.openstreetmap.org/search}
       GEOCODING_USER_AGENT: ${GEOCODING_USER_AGENT:-HealthMap360/0.1 (interactive public health location search)}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
@@ -36,8 +38,8 @@ services:
     command: ["python", "-m", "app.worker"]
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres@db:5432/healthmap360
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      DATABASE_URL: postgresql+psycopg://healthmap_app@db:5432/healthmap360
+      DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set APP_DATABASE_PASSWORD}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
       ENVIRONMENT: production
     depends_on:

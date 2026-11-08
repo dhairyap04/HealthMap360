@@ -52,7 +52,7 @@ def test_data_requires_authentication(client, path):
 
 def test_public_role_is_read_only(client, auth, sample):
     headers = auth["reader"]
-    assert client.get("/cases", headers=headers).status_code == 200
+    assert client.get("/cases", headers=headers).status_code == 403
     assert upload(client, headers, sample).status_code == 403
     assert (
         client.post("/locations", headers=headers, json={"name": "Test", "latitude": 0, "longitude": 0}).status_code
@@ -66,21 +66,21 @@ def test_import_persists_summary_map_filters_and_export(client, auth, sample):
     response = upload(client, auth["analyst"], sample)
     assert response.status_code == 201, response.text
     assert response.json()["imported"] == 2
-    summary = client.get("/summary", headers=auth["reader"]).json()
+    summary = client.get("/summary", headers=auth["analyst"]).json()
     assert summary["total_cases"] == 23
     assert summary["observations"] == 2
     assert summary["affected_locations"] == 2
     assert summary["locations"][0]["name"] == "Edmonton"
     assert summary["locations"][0]["latitude"] == 53.5461
-    assert client.get("/summary?disease=INFLUENZA", headers=auth["reader"]).json()["total_cases"] == 14
+    assert client.get("/summary?disease=INFLUENZA", headers=auth["analyst"]).json()["total_cases"] == 14
     assert (
-        client.get("/summary?severity=high&date_from=2026-11-02&date_to=2026-11-02", headers=auth["reader"]).json()[
+        client.get("/summary?severity=high&date_from=2026-11-02&date_to=2026-11-02", headers=auth["analyst"]).json()[
             "total_cases"
         ]
         == 9
     )
-    assert client.get("/cases?date_from=2026-12-01&date_to=2026-11-01", headers=auth["reader"]).status_code == 422
-    exported = client.get("/cases/export?disease=influenza", headers=auth["reader"])
+    assert client.get("/cases?date_from=2026-12-01&date_to=2026-11-01", headers=auth["analyst"]).status_code == 422
+    exported = client.get("/cases/export?disease=influenza", headers=auth["analyst"])
     assert exported.status_code == 200
     assert "Edmonton" in exported.text and "Calgary" not in exported.text
     assert client.get("/imports", headers=auth["analyst"]).json()[0]["imported"] == 2
@@ -103,9 +103,9 @@ def test_full_file_beyond_100_rows_and_pagination(client, auth, sample):
     header = sample.splitlines()[0]
     text = header + "\n" + "\n".join(f"2026-11-01,Location {n},influenza,1,low,Test,0,{n / 10}" for n in range(151))
     assert upload(client, auth["analyst"], text).json()["imported"] == 151
-    data = client.get("/cases?page=2&page_size=100", headers=auth["reader"]).json()
+    data = client.get("/cases?page=2&page_size=100", headers=auth["analyst"]).json()
     assert data["total"] == 151 and len(data["items"]) == 51
-    assert client.get("/summary", headers=auth["reader"]).json()["total_cases"] == 151
+    assert client.get("/summary", headers=auth["analyst"]).json()["total_cases"] == 151
 
 
 def test_invalid_row_after_100_rolls_back_everything(client, auth, sample, database):
@@ -144,13 +144,13 @@ def test_mapping_existing_location_and_zero_counts(client, auth):
     text = "day,city,illness,count,level\n2026-11-01, EDMONTON ,Flu,0,LOW"
     mapping = {"date": "day", "location": "city", "disease": "illness", "case_count": "count", "severity": "level"}
     assert upload(client, auth["analyst"], text, mapping).json()["imported"] == 1
-    assert len(client.get("/locations", headers=auth["reader"]).json()) == 1
-    assert client.get("/cases", headers=auth["reader"]).json()["items"][0]["case_count"] == 0
+    assert len(client.get("/locations", headers=auth["analyst"]).json()) == 1
+    assert client.get("/cases", headers=auth["analyst"]).json()["items"][0]["case_count"] == 0
 
 
 def test_resource_allocation_and_case_corrections(client, auth, sample):
     upload(client, auth["analyst"], sample)
-    case = client.get("/cases", headers=auth["reader"]).json()["items"][0]
+    case = client.get("/cases", headers=auth["analyst"]).json()["items"][0]
     location_id = case["location_id"]
     payload = {"type": "Masks", "quantity": 100}
     created = client.post("/resources", headers=auth["analyst"], json=payload)
@@ -159,10 +159,10 @@ def test_resource_allocation_and_case_corrections(client, auth, sample):
     allocated = {**payload, "location_id": location_id, "allocated_date": "2026-11-07"}
     assert client.put(f"/resources/{resource_id}", headers=auth["analyst"], json=allocated).status_code == 200
     assert (
-        client.get(f"/resources?location_id={location_id}", headers=auth["reader"]).json()[0]["location"]["id"]
+        client.get(f"/resources?location_id={location_id}", headers=auth["analyst"]).json()[0]["location"]["id"]
         == location_id
     )
-    assert client.get(f"/summary?location_id={location_id}", headers=auth["reader"]).json()["resource_units"] == 100
+    assert client.get(f"/summary?location_id={location_id}", headers=auth["analyst"]).json()["resource_units"] == 100
     assert client.post("/resources", headers=auth["analyst"], json={"type": "Beds", "quantity": -1}).status_code == 422
     assert client.post("/resources", headers=auth["analyst"], json={**payload, "location_id": 9999}).status_code == 422
     assert (
@@ -172,7 +172,7 @@ def test_resource_allocation_and_case_corrections(client, auth, sample):
     assert (
         client.put(f"/cases/{case['id']}", headers=auth["analyst"], json={**case, "case_count": 25}).status_code == 200
     )
-    assert client.get("/summary", headers=auth["reader"]).json()["total_cases"] == 39
+    assert client.get("/summary", headers=auth["analyst"]).json()["total_cases"] == 39
     assert client.delete(f"/resources/{resource_id}", headers=auth["analyst"]).status_code == 204
     assert client.delete(f"/cases/{case['id']}", headers=auth["analyst"]).status_code == 204
 
@@ -240,7 +240,7 @@ def test_import_size_and_row_limits(client, auth, sample, monkeypatch):
 def test_csv_export_neutralizes_formulas(client, auth):
     text = "date,location,disease,case_count,severity,latitude,longitude\n2026-11-01,=EVIL(),flu,1,low,0,0"
     assert upload(client, auth["analyst"], text).status_code == 201
-    assert "'=EVIL()" in client.get("/cases/export", headers=auth["reader"]).text
+    assert "'=EVIL()" in client.get("/cases/export", headers=auth["analyst"]).text
 
 
 def test_production_requires_secret():
@@ -268,7 +268,7 @@ def test_source_changes_are_conflicting_not_silently_discarded(client, auth, sam
 def test_coordinate_conflicts_are_atomic(client, auth):
     text = "date,location,disease,case_count,severity,latitude,longitude\n2026-11-01,City,flu,1,low,0,0\n2026-11-02,City,flu,1,low,1,0"
     assert upload(client, auth["analyst"], text).status_code == 422
-    assert client.get("/locations", headers=auth["reader"]).json() == []
+    assert client.get("/locations", headers=auth["analyst"]).json() == []
 
 
 def test_short_normalized_username_rejected(client):

@@ -12,3 +12,6 @@ alembic>=1.14,<2
 dnspython>=2.9,<3
 # SQLAlchemy needs greenlet on Linux; lock it explicitly across build platforms.
 greenlet>=3.1,<4
+
+# Authenticated encryption for administrator TOTP enrollment secrets.
+cryptography>=46,<51

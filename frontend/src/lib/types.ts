@@ -1,5 +1,12 @@
 export type Role = 'public' | 'analyst' | 'admin'
-export type User = { id: number; username: string; email: string; role: Role }
+export type User = {
+  id: number
+  username: string
+  email: string
+  role: Role
+  mfa_enabled: boolean
+  mfa_required: boolean
+}
 export type Location = {
   id: number
   name: string
@@ -20,6 +27,9 @@ export type Observation = {
   location: Location
   date: string
   disease: string
+  quality_status: string
+  provenance: string
+  version: number
   case_count: number
   severity: Assessment
   source: string | null
@@ -62,6 +72,7 @@ export type Summary = {
     reporting_periods: number[]
     sources: string[]
   }
+  excluded_for_review: number
   total_cases: number
   observations: number
   affected_locations: number

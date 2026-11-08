@@ -4,6 +4,7 @@ export const MAX_ROWS = 10000
 export const MAX_BYTES = 50 * 1024 * 1024
 export const REQUIRED_FIELDS = ['date', 'location', 'disease', 'case_count'] as const
 export const OPTIONAL_FIELDS = [
+  'metric',
   'severity',
   'source',
   'latitude',
@@ -67,6 +68,7 @@ export function guessMapping(fields: string[]): ColumnMapping {
     location: ['location', 'city'],
     disease: ['disease', 'condition', 'illness'],
     case_count: ['case_count', 'cases', 'count'],
+    metric: ['metric'],
     severity: ['severity', 'level'],
     source: ['source'],
     reporting_period_days: ['reporting_period_days', 'period_days'],
@@ -98,6 +100,12 @@ export function validateRows(rows: RawCsvRow[], mapping: ColumnMapping): RowVali
       issues.push({ field: 'location', message: 'Location is required (maximum 200 characters)' })
     if (!value('disease') || value('disease').length > 120)
       issues.push({ field: 'disease', message: 'Disease is required (maximum 120 characters)' })
+    if (value('metric') && value('metric') !== 'reported_cases')
+      issues.push({
+        field: 'metric',
+        message:
+          'This importer accepts reported_cases only. Laboratory detections, positivity and wastewater require a different metric adapter.',
+      })
     const period = value('reporting_period_days')
     if (period && !['1', '7'].includes(period))
       issues.push({

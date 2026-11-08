@@ -1,3 +1,4 @@
+import AccountSecurity from '../components/AccountSecurity'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/context'
@@ -51,6 +52,7 @@ export default function Settings() {
   const current = edit && edit !== 'new' ? edit : null
   return (
     <>
+      <AccountSecurity />
       <div className="page-heading">
         <div>
           <p className="eyebrow">WORKSPACE MANAGEMENT</p>
@@ -110,6 +112,12 @@ export default function Settings() {
                 required
               />
             </label>
+            {user?.mfa_enabled && (
+              <label>
+                Authenticator code
+                <input name="otp" pattern="[0-9]{6}" autoComplete="one-time-code" required />
+              </label>
+            )}
             <button disabled={busy}>Change password</button>
           </form>
         </section>

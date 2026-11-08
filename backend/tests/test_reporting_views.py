@@ -49,18 +49,19 @@ def test_geography_never_adds_country_to_its_cities(client, auth):
     for place, count in [(city, 5), (region, 500), (country, 50000)]:
         add_report(client, auth, place, count)
     for scope, count in [("local", 5), ("regional", 500), ("national", 50000)]:
-        data = client.get("/summary", headers=auth["reader"], params={"geographic_scope": scope}).json()
+        data = client.get("/summary", headers=auth["analyst"], params={"geographic_scope": scope}).json()
         assert data["total_cases"] == count
         assert data["affected_locations"] == 1
         assert len(data["locations"]) == 1
-        rows = client.get("/cases", headers=auth["reader"], params={"geographic_scope": scope}).json()
+        rows = client.get("/cases", headers=auth["analyst"], params={"geographic_scope": scope}).json()
         assert rows["total"] == 1 and rows["items"][0]["case_count"] == count
-        exported = client.get("/cases/export", headers=auth["reader"], params={"geographic_scope": scope})
+        exported = client.get("/cases/export", headers=auth["analyst"], params={"geographic_scope": scope})
         assert len(exported.text.splitlines()) == 2
-    assert client.get("/summary", headers=auth["reader"]).json()["total_cases"] == 5
+    assert client.get("/summary", headers=auth["analyst"]).json()["total_cases"] == 5
     # A location selected under another geography cannot leak national numbers.
     assert (
-        client.get("/summary", headers=auth["reader"], params={"location_id": country["id"]}).json()["total_cases"] == 0
+        client.get("/summary", headers=auth["analyst"], params={"location_id": country["id"]}).json()["total_cases"]
+        == 0
     )
 
 
@@ -69,19 +70,19 @@ def test_windows_expose_historical_dates_and_preserve_missing_reports(client, au
     last = date(2021, 12, 26)
     add_report(client, auth, country, 80, last, reporting_period_days=7, source="WHO fixture")
     add_report(client, auth, country, 20, last - timedelta(days=7), reporting_period_days=7)
-    current = client.get("/summary?geographic_scope=national", headers=auth["reader"]).json()
+    current = client.get("/summary?geographic_scope=national", headers=auth["analyst"]).json()
     assert current["observations"] == 0 and current["view"]["historical"] is True
     assert current["view"]["latest_report_date"] == str(last)
-    latest = client.get("/summary?geographic_scope=national&time_window=latest", headers=auth["reader"]).json()
+    latest = client.get("/summary?geographic_scope=national&time_window=latest", headers=auth["analyst"]).json()
     assert latest["total_cases"] == 80 and latest["view"]["date_to"] == str(last)
     assert latest["view"]["date_from"] == str(last - timedelta(days=6))
     assert latest["view"]["reporting_periods"] == [7]
-    history = client.get("/summary?geographic_scope=national&time_window=historical", headers=auth["reader"]).json()
+    history = client.get("/summary?geographic_scope=national&time_window=historical", headers=auth["analyst"]).json()
     assert history["total_cases"] == 100 and len(history["trend"]) == 2
     assert history["by_severity"] == [{"severity": "unassessed", "cases": 100}]
-    assert client.get("/summary?geographic_scope=all", headers=auth["reader"]).status_code == 422
-    assert client.get("/summary?time_window=unknown", headers=auth["reader"]).status_code == 422
-    assert client.get("/summary?date_from=2026-02-02&date_to=2026-01-01", headers=auth["reader"]).status_code == 422
+    assert client.get("/summary?geographic_scope=all", headers=auth["analyst"]).status_code == 422
+    assert client.get("/summary?time_window=unknown", headers=auth["analyst"]).status_code == 422
+    assert client.get("/summary?date_from=2026-02-02&date_to=2026-01-01", headers=auth["analyst"]).status_code == 422
 
 
 def test_latest_window_is_common_across_locations_and_diseases(client, auth):
@@ -89,9 +90,9 @@ def test_latest_window_is_common_across_locations_and_diseases(client, auth):
     b = add_place(client, auth, "B", "city")
     add_report(client, auth, a, 10)
     add_report(client, auth, b, 100, date.today() - timedelta(days=50))
-    data = client.get("/summary?time_window=latest", headers=auth["reader"]).json()
+    data = client.get("/summary?time_window=latest", headers=auth["analyst"]).json()
     assert data["total_cases"] == 10 and data["affected_locations"] == 1
-    empty = client.get("/summary?disease=missing&time_window=latest", headers=auth["reader"]).json()
+    empty = client.get("/summary?disease=missing&time_window=latest", headers=auth["analyst"]).json()
     assert empty["observations"] == 0 and empty["view"]["latest_report_date"] is None
 
 
@@ -99,7 +100,7 @@ def test_csv_assessment_is_optional_but_priorities_remain_required_levels(client
     csv = f"date,location,disease,case_count,latitude,longitude\n{date.today()},Edmonton,influenza,2,53,-113\n"
     result = client.post("/imports", headers=auth["analyst"], files={"file": ("optional.csv", csv, "text/csv")})
     assert result.status_code == 201, result.text
-    assert client.get("/cases", headers=auth["reader"]).json()["items"][0]["severity"] == "unassessed"
+    assert client.get("/cases", headers=auth["analyst"]).json()["items"][0]["severity"] == "unassessed"
     response = client.post(
         "/alert-rules",
         headers=auth["analyst"],
@@ -155,7 +156,7 @@ def test_historical_date_filter_does_not_misrepresent_source_freshness(client, a
     add_report(client, auth, country, 1)
     data = client.get(
         "/summary",
-        headers=auth["reader"],
+        headers=auth["analyst"],
         params={
             "geographic_scope": "national",
             "time_window": "historical",

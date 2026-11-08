@@ -9,15 +9,16 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth.security import analyst, current_user
+from app.auth.security import analyst
 from app.db.session import get_db
 from app.models.models import Alert, Case, CaseRevision, Feed, Location, Outbreak, Resource, User
 from app.schemas.health import CaseInput, CaseOut, LocationInput, LocationOut, ResourceInput, ResourceOut
 from app.services.alerts import evaluate_alerts
 from app.services.geocoding import search_places
+from app.services.observations import classify_provenance, lock_locations, validate_intervals
 from app.services.surveillance import revision, snapshot, validate_link
 
-router = APIRouter(tags=["data"], dependencies=[Depends(current_user)])
+router = APIRouter(tags=["data"], dependencies=[Depends(analyst)])
 SEVERITY_ORDER = {"unassessed": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
@@ -93,6 +94,15 @@ def update_location(location_id: int, data: LocationInput, db: Session = Depends
     ):
         raise HTTPException(
             422, "This location is linked to a national feed. Its country and geography must stay unchanged."
+        )
+    lock_locations(db, [location_id])
+    if db.scalar(select(Case.id).where(Case.location_id == location_id).limit(1)) and any(
+        getattr(location, key) != getattr(data, key)
+        for key in ("latitude", "longitude", "administrative_level", "country_code", "region_code")
+    ):
+        raise HTTPException(
+            409,
+            "Reporting geography is in use. Create a separate reporting area and review assignments instead of moving existing reports.",
         )
     for key, value in data.model_dump().items():
         setattr(location, key, value)
@@ -201,7 +211,11 @@ def save_observation(db, observation, before, action, user):
 def create_case(data: CaseInput, user: User = Depends(analyst), db: Session = Depends(get_db)):
     if not db.get(Location, data.location_id):
         raise HTTPException(422, "Location not found")
-    return save_observation(db, Case(**data.model_dump()), None, "create", user)
+    lock_locations(db, [data.location_id])
+    validate_intervals(db, [data])
+    return save_observation(
+        db, Case(**data.model_dump(), provenance=classify_provenance(data.source)), None, "create", user
+    )
 
 
 @router.get("/cases/{case_id}/history")
@@ -232,12 +246,23 @@ def case_history(case_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/cases/{case_id}", response_model=CaseOut)
-def update_case(case_id: int, data: CaseInput, user: User = Depends(analyst), db: Session = Depends(get_db)):
+def update_case(
+    case_id: int,
+    data: CaseInput,
+    user: User = Depends(analyst),
+    db: Session = Depends(get_db),
+    expected_version: int | None = Query(None, gt=0),
+):
     observation = db.get(Case, case_id)
     if not observation:
         raise HTTPException(404, "Case observation not found")
     if not db.get(Location, data.location_id):
         raise HTTPException(422, "Location not found")
+    lock_locations(db, [observation.location_id, data.location_id])
+    db.refresh(observation)
+    if expected_version is not None and expected_version != observation.version:
+        raise HTTPException(409, "This observation changed. Refresh before editing again.")
+    validate_intervals(db, [data], [case_id])
     validate_link(db, observation.outbreak_id, data)
     before = snapshot(observation)
     for key, value in data.model_dump().items():
@@ -249,6 +274,9 @@ def update_case(case_id: int, data: CaseInput, user: User = Depends(analyst), db
         if key != "severity"
     ):
         observation.feed_id = None
+    observation.version += 1
+    observation.quality_status = "valid"
+    observation.provenance = classify_provenance(observation.source, observation.feed_id)
     return save_observation(db, observation, before, "update", user)
 
 
@@ -257,6 +285,8 @@ def delete_case(case_id: int, user: User = Depends(analyst), db: Session = Depen
     observation = db.get(Case, case_id)
     if not observation:
         raise HTTPException(404, "Case observation not found")
+    lock_locations(db, [observation.location_id])
+    db.refresh(observation)
     revision(db, observation, snapshot(observation), "delete", user_id=user.id)
     db.delete(observation)
     evaluate_alerts(db)
@@ -266,7 +296,9 @@ def delete_case(case_id: int, user: User = Depends(analyst), db: Session = Depen
 @router.get("/monitoring")
 def monitoring(db: Session = Depends(get_db)):
     return {
-        "open_alerts": db.scalar(select(func.count(Alert.id)).where(Alert.status == "open")),
+        "open_alerts": db.scalar(
+            select(func.count(Alert.id)).where(Alert.status == "open", Alert.is_historical.is_(False))
+        ),
         "active_outbreaks": db.scalar(select(func.count(Outbreak.id)).where(Outbreak.status != "closed")),
         "enabled_feeds": db.scalar(select(func.count(Feed.id)).where(Feed.enabled.is_(True))),
         "failed_feeds": db.scalar(
@@ -290,10 +322,12 @@ def summary(
     from app.services.geography import scope_expression
 
     scope_ids = select(Location.id).where(scope_expression() == geographic_scope)
-    filters = [*filters, Case.location_id.in_(scope_ids)]
+    filters = [*filters, Case.location_id.in_(scope_ids), Case.quality_status == "valid"]
     # Latest available is common to this filtered geography, never a hidden per-place window.
     freshness_filters = case_filters(None, None, disease, severity, location_id, geographic_scope)
-    latest = db.scalar(select(func.max(Case.date)).where(*freshness_filters, Case.date <= date.today()))
+    latest = db.scalar(
+        select(func.max(Case.date)).where(*freshness_filters, Case.date <= date.today(), Case.quality_status == "valid")
+    )
     first = db.scalar(select(func.min(Case.date)).where(*filters))
     start, end = date_from, date_to
     if time_window == "last28":
@@ -356,6 +390,9 @@ def summary(
             "reporting_periods": list(db.scalars(select(Case.reporting_period_days).where(*filters).distinct())),
             "sources": list(db.scalars(select(Case.source).where(*filters, Case.source.is_not(None)).distinct())),
         },
+        "excluded_for_review": db.scalar(
+            select(func.count(Case.id)).where(*freshness_filters, Case.quality_status != "valid")
+        ),
         "total_cases": totals[0],
         "observations": totals[1],
         "affected_locations": totals[2],
@@ -419,3 +456,38 @@ def delete_resource(resource_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Resource not found")
     db.delete(resource)
     db.commit()
+
+
+@router.get("/data-health")
+def data_health(db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(
+            Location.id,
+            Location.name,
+            Case.disease,
+            Case.source,
+            Case.provenance,
+            func.max(Case.date),
+            func.count(Case.id),
+        )
+        .join(Case)
+        .group_by(Location.id, Location.name, Case.disease, Case.source, Case.provenance)
+        .limit(500)
+    ).all()
+    return {
+        "series": [
+            {
+                "location_id": area,
+                "location": name,
+                "disease": disease,
+                "source": source,
+                "provenance": provenance,
+                "latest_report": str(latest),
+                "historical": (date.today() - latest).days > 30,
+                "observations": count,
+            }
+            for area, name, disease, source, provenance, latest, count in rows
+        ],
+        "conflicts": db.scalar(select(func.count(Case.id)).where(Case.quality_status != "valid")),
+        "note": "Source report dates are independent of successful downloads. Demo data is never live surveillance. At most 500 source series are shown.",
+    }

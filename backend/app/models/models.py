@@ -60,6 +60,9 @@ class Case(Base):
     case_count = Column(Integer, nullable=False)
     severity = Column(String(20), nullable=False)
     source = Column(String(300))
+    quality_status = Column(String(20), nullable=False, default="valid", server_default="valid")
+    provenance = Column(String(20), nullable=False, default="unverified", server_default="unverified")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
     reporting_period_days = Column(Integer, nullable=False, default=1, server_default="1")
     outbreak_id = Column(Integer, ForeignKey("outbreaks.id", ondelete="SET NULL"), index=True)
     feed_id = Column(Integer, ForeignKey("feeds.id", ondelete="SET NULL"), index=True)
@@ -87,6 +90,20 @@ class User(Base):
     role = Column(String(20), nullable=False, default="public")
     hashed_password = Column(String, nullable=False)
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
+    mfa_secret = Column(Text)
+    mfa_pending = Column(Text)
+    mfa_last_step = Column(Integer, nullable=False, default=-1, server_default="-1")
+
+    @property
+    def mfa_enabled(self):
+        return bool(self.mfa_secret)
+
+    @property
+    def mfa_required(self):
+        from app.core.config import get_settings
+
+        return self.role == "admin" and get_settings().require_admin_mfa and not self.mfa_secret
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -158,16 +175,18 @@ class AlertRule(Base):
     severity = Column(String(20), nullable=False, default="medium")
     enabled = Column(Boolean, nullable=False, default=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    geographic_scope = Column(String(20), nullable=False, default="local", server_default="local")
     location = relationship("Location")
 
 
 class Alert(Base):
     __tablename__ = "alerts"
-    __table_args__ = (
-        UniqueConstraint("rule_id", "location_id", "disease", "window_end", name="uq_alert_evaluation"),
-        CheckConstraint("status IN ('open','acknowledged','resolved')", name="alert_status"),
-    )
+    __table_args__ = (CheckConstraint("status IN ('open','acknowledged','resolved')", name="alert_status"),)
     id = Column(Integer, primary_key=True)
+    outbreak_id = Column(Integer, ForeignKey("outbreaks.id"))
+    is_historical = Column(Boolean, nullable=False, default=False, server_default="false")
+    data_state = Column(String(30), nullable=False, default="unknown", server_default="unknown")
+    latest_report_date = Column(Date)
     rule_id = Column(Integer, ForeignKey("alert_rules.id"), nullable=False)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
     disease = Column(String(120), nullable=False)
@@ -235,3 +254,73 @@ class WorkerHeartbeat(Base):
     __tablename__ = "worker_heartbeat"
     id = Column(String(30), primary_key=True)
     last_tick_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class AlertEvaluation(Base):
+    __tablename__ = "alert_evaluations"
+    __table_args__ = (
+        UniqueConstraint("rule_id", "location_id", "disease", "as_of", "is_historical", name="uq_signal_day"),
+    )
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey("alert_rules.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
+    disease = Column(String(120), nullable=False)
+    as_of = Column(Date, nullable=False)
+    is_historical = Column(Boolean, nullable=False)
+    state = Column(String(30), nullable=False)
+    value = Column(Integer)
+    threshold = Column(Integer, nullable=False)
+    window_start = Column(Date, nullable=False)
+    latest_report_date = Column(Date)
+    complete = Column(Boolean, nullable=False)
+    periods = Column(JSON, nullable=False)
+    incident_id = Column(Integer, ForeignKey("alerts.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Publication(Base):
+    __tablename__ = "publications"
+    id = Column(Integer, primary_key=True)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=False, index=True)
+    outbreak_id = Column(Integer, ForeignKey("outbreaks.id"))
+    disease = Column(String(120), nullable=False)
+    date_from = Column(Date, nullable=False)
+    date_to = Column(Date, nullable=False)
+    title = Column(String(200), nullable=False)
+    public_name = Column(String(200), nullable=False)
+    summary = Column(Text, nullable=False)
+    methodology = Column(Text, nullable=False)
+    source_name = Column(String(200), nullable=False)
+    source_url = Column(String(500), nullable=False)
+    suppression_threshold = Column(Integer, nullable=False, default=5)
+    payload = Column(JSON, nullable=False)
+    fingerprint = Column(String(64), nullable=False)
+    status = Column(String(20), nullable=False, default="draft")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    published_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    published_at = Column(DateTime(timezone=True))
+
+
+class PublicationEvent(Base):
+    __tablename__ = "publication_events"
+    id = Column(Integer, primary_key=True)
+    publication_id = Column(Integer, ForeignKey("publications.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(30), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RateBucket(Base):
+    __tablename__ = "rate_buckets"
+    id = Column(String(64), primary_key=True)
+    count = Column(Integer, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class RecoveryToken(Base):
+    __tablename__ = "recovery_tokens"
+    digest = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, nullable=False, default=False)

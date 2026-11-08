@@ -1491,3 +1491,52 @@ input.row-checkbox {
     flex-direction: column;
   }
 }
+
+.public-shell {
+  min-height: 100vh;
+  background: #f5f8f6;
+}
+.public-header {
+  padding: 20px 4%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: white;
+  border-bottom: 1px solid #dce5df;
+}
+.public-header nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.public-shell .page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.public-reports {
+  display: grid;
+  gap: 22px;
+  margin: 24px 0;
+}
+.public-reports details {
+  padding: 14px 0;
+}
+.public-entry {
+  background: white;
+  text-align: center;
+  padding: 20px;
+}
+td > small {
+  display: block;
+  font-size: 0.7rem;
+  margin-top: 4px;
+}
+.mfa-secret {
+  display: block;
+  padding: 15px;
+  background: #edf3ef;
+  overflow-wrap: anywhere;
+}

@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation, Link } from 'react-router-dom'
 import { lazy, Suspense, useState } from 'react'
 import { useAuth } from './auth/context'
 import { errorMessage } from './lib/api'
@@ -9,13 +9,44 @@ const Resources = lazy(() => import('./pages/Resources'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Outbreaks = lazy(() => import('./pages/Outbreaks'))
 const Alerts = lazy(() => import('./pages/Alerts'))
+const PublicPortal = lazy(() => import('./pages/PublicPortal'))
+const Publications = lazy(() => import('./pages/Publications'))
+const DataHealth = lazy(() => import('./pages/DataHealth'))
 const Feeds = lazy(() => import('./pages/Feeds'))
 import Login from './pages/Login'
+import AccountSecurity from './components/AccountSecurity'
 
 export default function App() {
   const { user, signOut } = useAuth()
   const [error, setError] = useState('')
-  if (!user) return <Login />
+  const location = useLocation()
+  if (
+    (location.pathname.startsWith('/public') && !location.pathname.startsWith('/publications')) ||
+    user?.role === 'public'
+  )
+    return (
+      <Suspense fallback={<p>Loading public reports…</p>}>
+        <Routes>
+          <Route path="/public/locations/:locationId" element={<PublicPortal />} />
+          <Route path="*" element={<PublicPortal />} />
+        </Routes>
+      </Suspense>
+    )
+  if (user?.mfa_required)
+    return (
+      <main className="page">
+        <AccountSecurity required />
+      </main>
+    )
+  if (!user)
+    return (
+      <>
+        <Login />
+        <div className="public-entry">
+          <Link to="/public">View published reports without signing in →</Link>
+        </div>
+      </>
+    )
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -36,6 +67,9 @@ export default function App() {
             ['/outbreaks', 'Investigations', '◉'],
             ['/alerts', 'Alerts', '◇'],
             ['/feeds', 'Data feeds', '⇄'],
+            ['/data-health', 'Data health', '◷'],
+            ['/publications', 'Publication review', '▣'],
+            ['/public', 'Public reports', '↗'],
             ['/resources', 'Resources', '▦'],
             ['/settings', 'Settings', '⚙'],
           ].map(([path, label, icon]) => (
@@ -65,9 +99,7 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <span>Public health workspace</span>
-          <span className="workspace-badge">
-            ● {user.role === 'public' ? 'Read access' : 'Data management'}
-          </span>
+          <span className="workspace-badge">● Data management</span>
         </header>
         {error && (
           <p role="alert" className="error">
@@ -91,6 +123,8 @@ export default function App() {
               <Route path="/outbreaks/:id" element={<Outbreaks />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/feeds" element={<Feeds />} />
+              <Route path="/data-health" element={<DataHealth />} />
+              <Route path="/publications" element={<Publications />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

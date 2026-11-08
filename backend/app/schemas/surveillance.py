@@ -71,6 +71,7 @@ class AlertRuleInput(BaseModel):
     location_id: int | None = Field(default=None, gt=0)
     threshold: int = Field(ge=1, le=2147483647)
     window_days: int = Field(default=7, ge=1, le=90)
+    geographic_scope: Literal["local", "regional", "national"] = "local"
     severity: Severity = "medium"
     enabled: bool = True
 

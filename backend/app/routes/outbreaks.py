@@ -3,14 +3,15 @@ from sqlalchemy import func, or_, select
 from sqlalchemy import update as sql_update
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth.security import analyst, current_user
+from app.auth.security import analyst
 from app.db.session import get_db
 from app.models.models import Case, Location, Outbreak, OutbreakUpdate, User
 from app.schemas.health import CaseOut, LocationOut
 from app.schemas.surveillance import CaseLinks, OutbreakInput, OutbreakNote
+from app.services.observations import lock_locations
 from app.services.surveillance import add_update, revision, snapshot, validate_link
 
-router = APIRouter(prefix="/outbreaks", tags=["outbreaks"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/outbreaks", tags=["outbreaks"], dependencies=[Depends(analyst)])
 
 
 def get_outbreak(db, outbreak_id, lock=False):
@@ -25,9 +26,24 @@ def get_outbreak(db, outbreak_id, lock=False):
 
 
 def outbreak_json(db, outbreak):
-    count, total = db.execute(
-        select(func.count(Case.id), func.coalesce(func.sum(Case.case_count), 0)).where(Case.outbreak_id == outbreak.id)
-    ).one()
+    rows = db.execute(
+        select(Case.location_id, func.count(Case.id), func.sum(Case.case_count))
+        .where(Case.outbreak_id == outbreak.id, Case.quality_status == "valid")
+        .group_by(Case.location_id)
+    ).all()
+    locations = {location.id: location for location in outbreak.locations}
+    subtotals = [
+        {
+            "location_id": area,
+            "location_name": locations[area].name,
+            "geographic_scope": locations[area].geographic_scope,
+            "observations": count,
+            "cases": total,
+        }
+        for area, count, total in rows
+    ]
+    count = sum(row[1] for row in rows)
+    total = rows[0][2] if len(rows) == 1 else 0 if not rows else None
     return {
         **{
             key: getattr(outbreak, key)
@@ -49,6 +65,13 @@ def outbreak_json(db, outbreak):
         "locations": [LocationOut.model_validate(loc) for loc in outbreak.locations],
         "observations": count,
         "reported_cases": total,
+        "totals_by_location": subtotals,
+        "aggregation_note": "Reporting areas are shown separately because overlap cannot be ruled out."
+        if len(rows) > 1
+        else "Only valid, explicitly linked observations in this reporting area.",
+        "excluded_for_review": db.scalar(
+            select(func.count(Case.id)).where(Case.outbreak_id == outbreak.id, Case.quality_status != "valid")
+        ),
     }
 
 
@@ -112,13 +135,16 @@ def detail(outbreak_id: int, db: Session = Depends(get_db)):
     ).all()
     trend = db.execute(
         select(Case.date, func.sum(Case.case_count))
-        .where(Case.outbreak_id == outbreak_id)
+        .where(Case.outbreak_id == outbreak_id, Case.quality_status == "valid")
         .group_by(Case.date)
         .order_by(Case.date)
     ).all()
+    data = outbreak_json(db, outbreak)
     return {
-        "trend": [{"date": str(day), "cases": count} for day, count in trend],
-        **outbreak_json(db, outbreak),
+        "trend": [{"date": str(day), "cases": count} for day, count in trend]
+        if len(data["totals_by_location"]) <= 1
+        else [],
+        **data,
         "updates": [
             {"id": u.id, "body": u.body, "kind": u.kind, "username": u.user.username, "created_at": u.created_at}
             for u in updates
@@ -179,6 +205,7 @@ def observations(outbreak_id: int, candidates: bool = False, page: int = Query(1
 
 @router.post("/{outbreak_id}/observations")
 def link(outbreak_id: int, data: CaseLinks, user: User = Depends(analyst), db: Session = Depends(get_db)):
+    lock_locations(db, [loc.id for loc in get_outbreak(db, outbreak_id).locations])
     outbreak = get_outbreak(db, outbreak_id, lock=True)
     if outbreak.status == "closed":
         raise HTTPException(409, "Reopen the investigation before changing linked observations")
@@ -188,6 +215,8 @@ def link(outbreak_id: int, data: CaseLinks, user: User = Depends(analyst), db: S
         raise HTTPException(422, "One or more observations do not exist")
     for observation in records:
         if data.action == "attach":
+            if observation.quality_status != "valid":
+                raise HTTPException(409, "Resolve the observation reporting-period conflict before linking it")
             validate_link(db, outbreak_id, observation)
             if observation.outbreak_id not in (None, outbreak_id):
                 raise HTTPException(409, "An observation already belongs to another outbreak")

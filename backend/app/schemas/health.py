@@ -39,6 +39,7 @@ class LocationOut(LocationInput):
 
 
 class CaseInput(BaseModel):
+    metric: Literal["reported_cases"] = Field(default="reported_cases", exclude=True)
     location_id: int = Field(gt=0)
     date: date
     disease: str = Field(min_length=1, max_length=120)
@@ -59,6 +60,9 @@ class CaseInput(BaseModel):
 class CaseOut(CaseInput):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    quality_status: str
+    provenance: str
+    version: int
     location: LocationOut
     outbreak_id: int | None = None
     feed_id: int | None = None

@@ -12,7 +12,15 @@ export type Outbreak = {
   owner: string
   locations: Location[]
   observations: number
-  reported_cases: number
+  reported_cases: number | null
+  totals_by_location: {
+    location_id: number
+    location_name: string
+    geographic_scope: string
+    cases: number
+  }[]
+  aggregation_note: string
+  excluded_for_review: number
   updated_at: string
 }
 export type OutbreakDetail = Outbreak & {
@@ -25,12 +33,17 @@ export type AlertRule = {
   disease: string | null
   location_id: number | null
   threshold: number
+  geographic_scope: string
   window_days: number
   severity: Severity
   enabled: boolean
 }
 export type Alert = {
+  outbreak_id: number | null
   id: number
+  is_historical: boolean
+  data_state: string
+  latest_report_date: string | null
   rule_name: string
   disease: string
   location_name: string

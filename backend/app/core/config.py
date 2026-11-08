@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 12
+    require_admin_mfa: bool = False
+    auth_attempt_limit: int = 20
     geocoding_url: str = "https://nominatim.openstreetmap.org/search"
     geocoding_user_agent: str = "HealthMap360/0.1 (interactive public health location search)"
     max_upload_bytes: int = 50 * 1024 * 1024
@@ -26,6 +28,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security(self):
+        if self.environment == "production":
+            self.require_admin_mfa = True
         if self.jwt_algorithm != "HS256":
             raise ValueError("Only HS256 is supported")
         if self.environment == "production" and (len(self.secret_key) < 32 or self.secret_key == "changeme-in-env"):

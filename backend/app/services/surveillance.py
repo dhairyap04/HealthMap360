@@ -12,6 +12,9 @@ def utcnow():
 def snapshot(observation):
     return {
         "id": observation.id,
+        "version": observation.version,
+        "quality_status": observation.quality_status,
+        "provenance": observation.provenance,
         "location_id": observation.location_id,
         "date": str(observation.date),
         "disease": observation.disease,

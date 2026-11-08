@@ -75,7 +75,7 @@ export default function Reports() {
     setBusy(true)
     setError('')
     try {
-      await api(`/cases/${edit.id}`, {
+      await api(`/cases/${edit.id}?expected_version=${edit.version}`, {
         method: 'PUT',
         body: JSON.stringify({
           ...fields,
@@ -229,7 +229,15 @@ export default function Reports() {
                       <td>{row.date}</td>
                       <td>{row.location.name}</td>
                       <td>{row.disease}</td>
-                      <td>{row.case_count.toLocaleString()}</td>
+                      <td>
+                        {row.case_count.toLocaleString()}
+                        <small className="muted">
+                          {row.provenance} ·{' '}
+                          {row.quality_status === 'valid'
+                            ? 'valid reporting interval'
+                            : 'Conflict: excluded from totals'}
+                        </small>
+                      </td>
                       <td>{row.reporting_period_days === 7 ? 'Weekly' : 'Daily'}</td>
                       <td>
                         {row.outbreak_id ? (

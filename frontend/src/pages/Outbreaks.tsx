@@ -81,7 +81,7 @@ function OutbreakList() {
                 </p>
                 <div className="investigation-numbers">
                   <strong>
-                    {outbreak.reported_cases.toLocaleString()}
+                    {outbreak.reported_cases?.toLocaleString() ?? 'By reporting area'}
                     <small>linked reported cases</small>
                   </strong>
                   <strong>
@@ -201,8 +201,8 @@ function OutbreakDetail({ id }: { id: number }) {
           <div className="stats-grid">
             <section className="stat">
               <p>Linked reported cases</p>
-              <strong>{outbreak.reported_cases.toLocaleString()}</strong>
-              <small>Only explicitly linked observations</small>
+              <strong>{outbreak.reported_cases?.toLocaleString() ?? 'By reporting area'}</strong>
+              <small>{outbreak.aggregation_note}</small>
             </section>
             <section className="stat">
               <p>Observations</p>
@@ -220,6 +220,25 @@ function OutbreakDetail({ id }: { id: number }) {
               <small>{outbreak.locations.map((l) => l.name).join(', ')}</small>
             </section>
           </div>
+          {outbreak.totals_by_location?.length > 0 && (
+            <section className="panel">
+              <h2>Separate reporting area totals</h2>
+              <p className="muted">
+                {outbreak.aggregation_note} {outbreak.excluded_for_review || 0} observations
+                excluded pending conflict review.
+              </p>
+              <div className="location-list">
+                {outbreak.totals_by_location.map((area) => (
+                  <div key={area.location_id}>
+                    <span>
+                      {area.location_name} · {area.geographic_scope}
+                    </span>
+                    <strong>{area.cases.toLocaleString()}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           <div className="chart-grid">
             <section className="panel">
               <h2>Situation summary</h2>

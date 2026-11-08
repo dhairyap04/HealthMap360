@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.models import Case, Feed, FeedRun, Location
 from app.services.alerts import evaluate_alerts
+from app.services.observations import lock_locations, validate_intervals
 from app.services.surveillance import revision, snapshot, utcnow
 
 WHO_URL = "https://srhdpeuwpubsa.blob.core.windows.net/whdh/COVID/WHO-COVID-19-global-data.csv"
@@ -125,12 +126,31 @@ def sync_feed(db, feed_id, force=False):
     try:
         rows = load_who_rows()
         observations, latest = parse_reports(rows, feed.country_code, feed.start_date)
+        lock_locations(db, [feed.location_id])
         existing = {
             record.date: record
             for record in db.scalars(
                 select(Case).where(Case.location_id == feed.location_id, Case.disease == "covid-19")
             )
         }
+        if any(record.date in observations and record.feed_id != feed.id for record in existing.values()):
+            raise ValueError("An analyst-owned observation exists in this interval; feed sync cannot overwrite it.")
+        candidates = [
+            Case(
+                location_id=feed.location_id,
+                disease="covid-19",
+                date=day,
+                reporting_period_days=7,
+                case_count=count,
+                severity="unassessed",
+            )
+            for day, count in observations.items()
+        ]
+        validate_intervals(
+            db,
+            candidates,
+            [record.id for record in existing.values() if record.feed_id == feed.id and record.date in observations],
+        )
         imported = updated = skipped = 0
         for day, count in observations.items():
             record = existing.get(day)
@@ -158,6 +178,7 @@ def sync_feed(db, feed_id, force=False):
                     source="WHO COVID-19 weekly country reports",
                     reporting_period_days=7,
                     feed_id=feed.id,
+                    provenance="source",
                 )
                 db.add(record)
                 db.flush()
@@ -166,6 +187,7 @@ def sync_feed(db, feed_id, force=False):
             elif record.case_count != count:
                 before = snapshot(record)
                 record.case_count = count
+                record.version += 1
                 revision(db, record, before, "feed_revision", feed_id=feed.id)
                 updated += 1
             else:
