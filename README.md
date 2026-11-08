@@ -1,12 +1,12 @@
 # HealthMap360
 
-A working public health workspace for importing daily disease observations, viewing outbreak trends and maps, and coordinating resource inventories.
+A working public health workspace for importing reported disease observations, viewing outbreak trends and maps, and coordinating resource inventories.
 
 ## What works
 
 - Registration, sign-in, session restoration, logout, password changes, and administrator-managed roles.
 - Full-file CSV parsing, column mapping, validation, atomic database import, duplicate detection, and import history.
-- Filtered dashboard metrics, daily trends, disease breakdowns, and geographic outbreak markers.
+- Filtered dashboard metrics, reporting trends, disease breakdowns, and geographic outbreak markers.
 - Paginated observations with corrections, deletion, and filtered CSV export.
 - Location search by city, region or address, with region/country context and map confirmation; resource inventory creation, allocation, editing, and deletion.
 - Versioned database migrations for SQLite development and PostgreSQL/PostGIS deployments.

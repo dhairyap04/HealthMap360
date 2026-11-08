@@ -112,7 +112,9 @@ export default function Feeds() {
         <p className={worker.data.online ? 'muted' : 'notice'} role="status">
           {worker.data.online
             ? `Scheduled refreshes are running · last checked ${dateTime(worker.data.last_tick_at)}`
-            : 'Scheduled refreshes are offline. You can still use Sync now; start the background worker to enable automatic updates.'}
+            : writable
+              ? 'Automatic refreshes are offline. Use Sync now while your workspace administrator restores scheduled updates.'
+              : 'Automatic refreshes are offline. Ask your workspace administrator to restore updates.'}
         </p>
       )}
       {status && (
@@ -262,7 +264,7 @@ export default function Feeds() {
               feeds.reload()
               worker.reload()
               setStatus(
-                'Feed saved. Enabled feeds are queued for the scheduled worker; use Sync now to run immediately.',
+                'Feed saved. Use Sync now to run immediately; enabled feeds refresh when automatic updates are running.',
               )
             }}
           />

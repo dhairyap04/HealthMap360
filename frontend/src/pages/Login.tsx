@@ -38,7 +38,9 @@ export default function Login() {
           <br />A coordinated response.
         </h1>
         <p>Bring outbreak observations and response resources into one geographic view.</p>
-        <div className="login-note">HealthMap360 · Daily observations, shared understanding.</div>
+        <div className="login-note">
+          HealthMap360 · Reported observations, shared understanding.
+        </div>
       </div>
       <main className="login-card">
         <p className="eyebrow">HEALTHMAP360</p>
