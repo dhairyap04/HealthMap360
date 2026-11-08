@@ -16,6 +16,7 @@ def health_check(db: Session = Depends(get_db)):
         db.execute(text("SELECT id FROM imports LIMIT 1"))
         db.execute(text("SELECT reporting_period_days FROM cases LIMIT 1"))
         db.execute(text("SELECT id FROM feeds LIMIT 1"))
+        db.execute(text("SELECT last_tick_at FROM worker_heartbeat LIMIT 1"))
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable or migrations not applied") from None
     return {"status": "ok", "database": "ok"}

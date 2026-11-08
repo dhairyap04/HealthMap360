@@ -12,6 +12,7 @@ import {
   Bar,
 } from 'recharts'
 import Filters from '../components/Filters'
+import MonitoringStrip from '../components/MonitoringStrip'
 import LoadState from '../components/LoadState'
 import { query } from '../lib/api'
 import { emptyFilters } from '../lib/types'
@@ -33,6 +34,7 @@ export default function Dashboard() {
           View reports ↗
         </Link>
       </div>
+      <MonitoringStrip />
       <Filters value={filters} onChange={setFilters} />
       <LoadState loading={loading} error={error} retry={reload} />
       {data && (

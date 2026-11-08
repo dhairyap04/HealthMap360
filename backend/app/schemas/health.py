@@ -13,6 +13,7 @@ class LocationInput(BaseModel):
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
     population: int | None = Field(default=None, ge=0, le=2147483647)
     administrative_level: str | None = Field(default=None, max_length=100)
+    country_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
 
     @field_validator("name")
     @classmethod

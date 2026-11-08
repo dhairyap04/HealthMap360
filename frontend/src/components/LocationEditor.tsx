@@ -6,7 +6,7 @@ import type { Location, PlaceResult } from '../lib/types'
 
 type Selection = Pick<
   PlaceResult,
-  'name' | 'label' | 'latitude' | 'longitude' | 'administrative_level'
+  'name' | 'label' | 'latitude' | 'longitude' | 'administrative_level' | 'country_code'
 >
 export default function LocationEditor({
   location,
@@ -81,6 +81,7 @@ export default function LocationEditor({
       name: name.trim(),
       latitude: selected.latitude,
       longitude: selected.longitude,
+      country_code: selected.country_code || null,
       population: fields.population ? Number(fields.population) : null,
       administrative_level: fields.administrative_level || selected.administrative_level || null,
     }

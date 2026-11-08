@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 from app.core.config import get_settings
@@ -39,7 +40,10 @@ def test_legacy_schema_adoption_preserves_records_and_is_repeatable(tmp_path, mo
         assert connection.execute(text("SELECT case_count FROM cases")).scalar() == 10
         assert connection.execute(text("SELECT hashed_password FROM users")).scalar() == "preserved-hash"
         assert connection.execute(text("SELECT username FROM users")).scalar() == "legacy"
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"
+        assert (
+            connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            == ScriptDirectory.from_config(config).get_current_head()
+        )
     engine.dispose()
 
 

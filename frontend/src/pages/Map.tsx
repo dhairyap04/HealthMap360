@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import type { Outbreak } from '../lib/surveillance'
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet'
 import Filters from '../components/Filters'
 import LoadState from '../components/LoadState'
@@ -23,12 +25,32 @@ export default function MapPage() {
   const [filters, setFilters] = useState({ ...emptyFilters })
   const reports = useApi<Summary>(`/summary${query(filters)}`)
   const saved = useApi<Location[]>('/locations')
+  const investigations = useApi<Outbreak[]>('/outbreaks')
   const locations = useMemo(() => {
     const observations = new Map(reports.data?.locations.map((location) => [location.id, location]))
     return (saved.data || [])
       .filter((location) => !filters.location_id || String(location.id) === filters.location_id)
-      .map((location) => ({ ...location, report: observations.get(location.id) }))
-  }, [reports.data, saved.data, filters.location_id])
+      .map((location) => ({
+        ...location,
+        report: observations.get(location.id),
+        investigations: (investigations.data || []).filter(
+          (outbreak) =>
+            outbreak.status !== 'closed' &&
+            outbreak.locations.some((l) => l.id === location.id) &&
+            (!filters.disease || outbreak.disease === filters.disease) &&
+            (!filters.date_from || !outbreak.ended_on || outbreak.ended_on >= filters.date_from) &&
+            (!filters.date_to || outbreak.started_on <= filters.date_to),
+        ),
+      }))
+  }, [
+    reports.data,
+    saved.data,
+    investigations.data,
+    filters.location_id,
+    filters.disease,
+    filters.date_from,
+    filters.date_to,
+  ])
   const loading = reports.loading || saved.loading
   const error = reports.error || saved.error
   const hasReportFilters = Boolean(
@@ -45,12 +67,18 @@ export default function MapPage() {
         </div>
       </div>
       <Filters value={filters} onChange={setFilters} />
+      {investigations.error && (
+        <p className="muted">
+          Investigation details could not be loaded. The case and location map is still available.
+        </p>
+      )}
       <LoadState
         loading={loading}
         error={error}
         retry={() => {
           reports.reload()
           saved.reload()
+          investigations.reload()
         }}
       />
       {!loading && !error && reports.data && saved.data && (
@@ -102,6 +130,16 @@ export default function MapPage() {
                             : 'No outbreak reports have been added for this location yet.'}
                         </p>
                       )}
+                      {location.investigations.length > 0 && (
+                        <div className="map-investigations">
+                          <strong>Open investigations</strong>
+                          {location.investigations.map((outbreak) => (
+                            <Link key={outbreak.id} to={`/outbreaks/${outbreak.id}`}>
+                              {outbreak.title} →
+                            </Link>
+                          ))}
+                        </div>
+                      )}
                     </Popup>
                   </CircleMarker>
                 ))}
@@ -126,6 +164,9 @@ export default function MapPage() {
                   <div key={location.id}>
                     <span>
                       <strong>{location.name}</strong>
+                      {location.investigations.length > 0 && (
+                        <small>{location.investigations.length} open investigation(s)</small>
+                      )}
                       <small>
                         <span className={`badge ${location.report?.severity || 'unreported'}`}>
                           {location.report?.severity || noReportsLabel}

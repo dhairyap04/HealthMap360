@@ -87,6 +87,14 @@ def create(data: OutbreakInput, user: User = Depends(analyst), db: Session = Dep
     return outbreak_json(db, outbreak)
 
 
+@router.get("/owners")
+def eligible_owners(db: Session = Depends(get_db)):
+    return [
+        {"id": user.id, "username": user.username}
+        for user in db.scalars(select(User).where(User.role.in_(["analyst", "admin"])).order_by(User.username))
+    ]
+
+
 @router.get("/{outbreak_id}")
 def detail(outbreak_id: int, db: Session = Depends(get_db)):
     outbreak = get_outbreak(db, outbreak_id)
@@ -97,7 +105,14 @@ def detail(outbreak_id: int, db: Session = Depends(get_db)):
         .order_by(OutbreakUpdate.id.desc())
         .limit(200)
     ).all()
+    trend = db.execute(
+        select(Case.date, func.sum(Case.case_count))
+        .where(Case.outbreak_id == outbreak_id)
+        .group_by(Case.date)
+        .order_by(Case.date)
+    ).all()
     return {
+        "trend": [{"date": str(day), "cases": count} for day, count in trend],
         **outbreak_json(db, outbreak),
         "updates": [
             {"id": u.id, "body": u.body, "kind": u.kind, "username": u.user.username, "created_at": u.created_at}

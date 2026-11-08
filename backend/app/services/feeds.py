@@ -80,8 +80,17 @@ def validate_feed(db, data):
         raise HTTPException(
             422, "WHO reports are country-level. Add the country in Settings and choose it instead of a city."
         )
-    if data.country_code not in {country["code"] for country in catalog()["countries"]}:
+    countries = {country["code"]: country["name"] for country in catalog()["countries"]}
+    if data.country_code not in countries:
         raise HTTPException(422, "Country code is not present in the source")
+    if location.country_code:
+        matches = location.country_code == data.country_code
+    else:
+        matches = location.name_key == " ".join(countries[data.country_code].split()).casefold()
+    if not matches:
+        raise HTTPException(
+            422, "The source country does not match the saved country. Choose its matching country location."
+        )
 
 
 def claimed_feed(db, feed_id, force=False):
@@ -90,6 +99,16 @@ def claimed_feed(db, feed_id, force=False):
     if not force:
         filters.append(or_(Feed.next_sync_at.is_(None), Feed.next_sync_at <= now))
     result = db.execute(update(Feed).where(*filters).values(lease_until=now + timedelta(minutes=5)))
+    if result.rowcount == 1:
+        db.execute(
+            update(FeedRun)
+            .where(FeedRun.feed_id == feed_id, FeedRun.status == "running")
+            .values(
+                status="failed",
+                message="Previous sync was interrupted; its lease expired and a new attempt was started.",
+                finished_at=now,
+            )
+        )
     db.commit()
     return result.rowcount == 1
 

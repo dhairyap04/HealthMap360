@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -5,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.security import analyst, current_user
 from app.db.session import get_db
-from app.models.models import Feed, FeedRun, User
+from app.models.models import Feed, FeedRun, User, WorkerHeartbeat
 from app.schemas.surveillance import FeedInput
 from app.services.feeds import catalog, sync_feed, validate_feed
 from app.services.surveillance import utcnow
@@ -55,6 +57,14 @@ def run_json(run):
     }
 
 
+@router.get("/worker-status")
+def worker_status(db: Session = Depends(get_db)):
+    heartbeat = db.get(WorkerHeartbeat, "scheduler")
+    tick = heartbeat.last_tick_at if heartbeat else None
+    aware = tick.replace(tzinfo=utcnow().tzinfo) if tick and tick.tzinfo is None else tick
+    return {"last_tick_at": tick, "online": bool(aware and utcnow() - aware < timedelta(minutes=5))}
+
+
 @router.get("/catalog", dependencies=[Depends(analyst)])
 def providers():
     return catalog()
@@ -97,7 +107,6 @@ def update_feed(feed_id: int, data: FeedInput, db: Session = Depends(get_db)):
             422,
             "Source country and target location cannot change after connection. Pause this feed and create another.",
         )
-    validate_feed(db, data)
     for key, value in data.model_dump().items():
         setattr(feed, key, value)
     feed.next_sync_at = utcnow()

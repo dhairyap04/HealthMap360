@@ -136,7 +136,7 @@ def import_csv(
                     case_count=int(count),
                     severity=get("severity").lower(),
                     source=get("source") or None,
-                    reporting_period_days=get("reporting_period_days") or 1,
+                    reporting_period_days=int(get("reporting_period_days") or "1"),
                 )
                 identity = (key, observation.date, observation.disease)
                 previous = observations.get(identity)

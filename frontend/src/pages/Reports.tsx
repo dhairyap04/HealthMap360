@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { FormEvent } from 'react'
 import { useAuth } from '../auth/context'
 import DataPreview from '../components/DataUpload/DataPreview'
 import FileUpload from '../components/DataUpload/FileUpload'
 import Dialog from '../components/Dialog'
+import CaseHistory from '../components/CaseHistory'
 import Filters from '../components/Filters'
 import LoadState from '../components/LoadState'
 import { api, downloadCases, errorMessage, query } from '../lib/api'
@@ -31,6 +33,7 @@ export default function Reports() {
   const [status, setStatus] = useState('')
   const [edit, setEdit] = useState<Observation | null>(null)
   const [remove, setRemove] = useState<Observation | null>(null)
+  const [audit, setAudit] = useState<Observation | null>(null)
   const invalid = upload
     ? validateRows(upload.parsed.rows, upload.mapping).filter((v) => !v.isValid).length
     : 0
@@ -78,6 +81,7 @@ export default function Reports() {
           ...fields,
           location_id: edit.location_id,
           case_count: Number(fields.case_count),
+          reporting_period_days: Number(fields.reporting_period_days),
         }),
       })
       setEdit(null)
@@ -113,7 +117,7 @@ export default function Reports() {
         <div>
           <p className="eyebrow">REPORTED OBSERVATIONS</p>
           <h1>Reports & data</h1>
-          <p className="muted">Import, review and export daily disease observations.</p>
+          <p className="muted">Import, review and export disease observations by report date.</p>
         </div>
         <button
           disabled={busy}
@@ -147,8 +151,9 @@ export default function Reports() {
             </a>
           </div>
           <p className="muted">
-            One daily count per location and disease. Zero is valid. New locations need latitude and
-            longitude. Exact duplicates are skipped; conflicting records must be edited.
+            One count per report date, location and disease. Zero is valid. Reporting periods are
+            daily unless specified as weekly. New locations need latitude and longitude. Exact
+            duplicates are skipped; conflicting records must be edited.
           </p>
           <FileUpload
             onReset={() => {
@@ -211,6 +216,8 @@ export default function Reports() {
                     <th>Location</th>
                     <th>Disease</th>
                     <th>Cases</th>
+                    <th>Period</th>
+                    <th>Investigation</th>
                     <th>Severity</th>
                     <th>Source</th>
                     {writable && <th>Actions</th>}
@@ -223,12 +230,23 @@ export default function Reports() {
                       <td>{row.location.name}</td>
                       <td>{row.disease}</td>
                       <td>{row.case_count.toLocaleString()}</td>
+                      <td>{row.reporting_period_days === 7 ? 'Weekly' : 'Daily'}</td>
+                      <td>
+                        {row.outbreak_id ? (
+                          <Link to={`/outbreaks/${row.outbreak_id}`}>
+                            Investigation #{row.outbreak_id}
+                          </Link>
+                        ) : (
+                          'Unassigned'
+                        )}
+                      </td>
                       <td>
                         <span className={`badge ${row.severity}`}>{row.severity}</span>
                       </td>
                       <td>{row.source || '—'}</td>
                       {writable && (
                         <td className="actions">
+                          <button onClick={() => setAudit(row)}>History</button>
                           <button
                             onClick={() => {
                               setEdit(row)
@@ -317,6 +335,12 @@ export default function Reports() {
           }}
         >
           <form onSubmit={updateRecord} className="form-stack">
+            {edit.feed_id && (
+              <p className="notice">
+                Saving a correction makes this observation analyst-owned. Future feed syncs will
+                stop rather than overwrite your changes.
+              </p>
+            )}
             <label>
               Date
               <input type="date" name="date" required defaultValue={edit.date} />
@@ -326,7 +350,7 @@ export default function Reports() {
               <input name="disease" required maxLength={120} defaultValue={edit.disease} />
             </label>
             <label>
-              Daily case count
+              Reported case count
               <input
                 name="case_count"
                 type="number"
@@ -336,6 +360,13 @@ export default function Reports() {
                 step={1}
                 defaultValue={edit.case_count}
               />
+            </label>
+            <label>
+              Reporting period
+              <select name="reporting_period_days" defaultValue={edit.reporting_period_days || 1}>
+                <option value={1}>Daily</option>
+                <option value={7}>Weekly</option>
+              </select>
             </label>
             <label>
               Severity
@@ -358,6 +389,11 @@ export default function Reports() {
               Save changes
             </button>
           </form>
+        </Dialog>
+      )}
+      {audit && (
+        <Dialog title="Observation history" close={() => setAudit(null)}>
+          <CaseHistory observation={audit} />
         </Dialog>
       )}
       {remove && (

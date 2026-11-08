@@ -81,3 +81,85 @@ def test_threshold_alert_is_deduplicated_and_can_be_acknowledged(client, auth):
         client.post(f"/alerts/{alert_id}/action", headers=headers, json={"action": "resolve"}).json()["status"]
         == "resolved"
     )
+
+
+def test_outbreak_scope_changes_cannot_orphan_linked_cases(client, auth):
+    today = date.today().isoformat()
+    headers = auth["analyst"]
+    city = client.post(
+        "/locations", headers=headers, json={"name": "Scope city", "latitude": 10, "longitude": 20}
+    ).json()
+    row = client.post(
+        "/cases",
+        headers=headers,
+        json={"location_id": city["id"], "date": today, "disease": "influenza", "case_count": 2, "severity": "low"},
+    ).json()
+    payload = {"title": "Scope test", "disease": "influenza", "started_on": today, "location_ids": [city["id"]]}
+    outbreak = client.post("/outbreaks", headers=headers, json=payload).json()
+    url = f"/outbreaks/{outbreak['id']}"
+    assert (
+        client.post(
+            url + "/observations", headers=headers, json={"action": "attach", "observation_ids": [row["id"]]}
+        ).status_code
+        == 200
+    )
+    assert client.put(url, headers=headers, json={**payload, "disease": "measles"}).status_code == 409
+    assert client.get(url, headers=headers).json()["disease"] == "influenza"
+    assert client.put(f"/cases/{row['id']}", headers=headers, json={**row, "disease": "measles"}).status_code == 409
+    assert client.put(url, headers=headers, json={**payload, "status": "closed"}).status_code == 422
+    assert client.put(url, headers=headers, json={**payload, "status": "closed", "ended_on": today}).status_code == 200
+    assert (
+        client.post(
+            url + "/observations", headers=headers, json={"action": "detach", "observation_ids": [row["id"]]}
+        ).status_code
+        == 409
+    )
+    assert client.put(url, headers=headers, json={**payload, "status": "active"}).status_code == 200
+    assert (
+        client.post(
+            url + "/observations", headers=headers, json={"action": "detach", "observation_ids": [row["id"]]}
+        ).status_code
+        == 200
+    )
+    assert client.get(url, headers=headers).json()["observations"] == 0
+
+
+def test_alert_window_boundaries_pause_and_count_corrections(client, auth):
+    from datetime import timedelta
+
+    headers = auth["analyst"]
+    city = client.post(
+        "/locations", headers=headers, json={"name": "Window city", "latitude": 0, "longitude": 0}
+    ).json()
+    rule = {"name": "Window rule", "disease": "influenza", "location_id": city["id"], "threshold": 5, "window_days": 7}
+    rule_id = client.post("/alert-rules", headers=headers, json=rule).json()["id"]
+    old = client.post(
+        "/cases",
+        headers=headers,
+        json={
+            "location_id": city["id"],
+            "date": (date.today() - timedelta(days=7)).isoformat(),
+            "disease": "influenza",
+            "case_count": 50,
+            "severity": "high",
+        },
+    )
+    assert old.status_code == 201
+    assert client.get("/alerts", headers=headers).json() == []
+    current = client.post(
+        "/cases",
+        headers=headers,
+        json={
+            "location_id": city["id"],
+            "date": (date.today() - timedelta(days=6)).isoformat(),
+            "disease": "influenza",
+            "case_count": 6,
+            "severity": "medium",
+        },
+    ).json()
+    assert client.get("/alerts", headers=headers).json()[0]["status"] == "open"
+    assert client.put(f"/cases/{current['id']}", headers=headers, json={**current, "case_count": 2}).status_code == 200
+    assert client.get("/alerts", headers=headers).json()[0]["status"] == "resolved"
+    assert client.put(f"/alert-rules/{rule_id}", headers=headers, json={**rule, "enabled": False}).status_code == 200
+    assert client.post("/alerts/evaluate", headers=headers).json()["evaluated_rules"] == 0
+    assert client.post("/alert-rules", headers=auth["reader"], json=rule).status_code == 403

@@ -31,6 +31,24 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres@db:5432/healthmap360
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      ENVIRONMENT: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker", "--health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
   frontend:
     build:
       context: .

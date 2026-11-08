@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.models.models import Alert, AlertRule, Case
 from app.services.surveillance import utcnow
@@ -32,8 +34,10 @@ def evaluate_alerts(db, as_of: date | None = None):
         for (location_id, disease), count in matching.items():
             alert = existing.get((location_id, disease))
             if alert is None:
-                db.add(
-                    Alert(
+                insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
+                result = db.execute(
+                    insert(Alert)
+                    .values(
                         rule_id=rule.id,
                         location_id=location_id,
                         disease=disease,
@@ -45,8 +49,9 @@ def evaluate_alerts(db, as_of: date | None = None):
                         window_end=as_of,
                         status="open",
                     )
+                    .on_conflict_do_nothing(index_elements=["rule_id", "location_id", "disease", "window_end"])
                 )
-                created += 1
+                created += result.rowcount
             elif alert.status != "resolved" or alert.resolution == "Rule changed or paused.":
                 if alert.resolution == "Rule changed or paused.":
                     alert.status = "open"

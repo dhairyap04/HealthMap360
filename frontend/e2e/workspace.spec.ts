@@ -20,7 +20,7 @@ test('complete public health workspace workflow', async ({ page }) => {
     page.getByText('8 / 8 valid records in the full file.', { exact: false }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Import 8 records' }).click()
-  await expect(page.locator('.success')).toContainText('8 records saved')
+  await expect(page.locator('p.success')).toContainText('8 records saved')
   await page.reload()
   await expect(page.getByRole('cell', { name: 'Edmonton', exact: true }).first()).toBeVisible()
   const download = page.waitForEvent('download')
@@ -107,12 +107,12 @@ test('complete public health workspace workflow', async ({ page }) => {
 
   await page.getByRole('link', { name: 'Reports & data' }).click()
   await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
-  await page.getByLabel('Daily case count').fill('5')
+  await page.getByLabel('Reported case count').fill('5')
   await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.locator('.success')).toHaveText('Observation updated.')
+  await expect(page.locator('p.success')).toHaveText('Observation updated.')
   await page.getByRole('button', { name: 'Delete', exact: true }).first().click()
   await page.getByRole('button', { name: 'Delete observation', exact: true }).click()
-  await expect(page.locator('.success')).toHaveText('Observation deleted.')
+  await expect(page.locator('p.success')).toHaveText('Observation deleted.')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('link', { name: 'Overview', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
@@ -136,7 +136,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
   await page.getByRole('combobox', { name: 'Role for public_browser' }).selectOption('analyst')
-  await expect(page.locator('.success')).toContainText('Access updated')
+  await expect(page.locator('p.success')).toContainText('Access updated')
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await page.getByLabel('Username', { exact: true }).fill('public_browser')
   await page.getByLabel('Password', { exact: true }).fill('public-test-password')
@@ -296,4 +296,122 @@ test('styled filters support keyboard use and place search requires an explicit 
   await page.getByLabel('Display name', { exact: true }).fill('Springfield, MA')
   await save.click()
   await expect(page.getByRole('cell', { name: 'Springfield, MA', exact: true })).toBeVisible()
+})
+
+test('investigations, alerts and WHO feeds work through the product screens', async ({ page }) => {
+  await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
+  await page.goto('/')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('link', { name: 'Investigations', exact: true }).click()
+  await page.getByRole('button', { name: 'New investigation' }).click()
+  await page.getByLabel('Investigation title').fill('Edmonton influenza response')
+  await page.getByLabel('Disease', { exact: true }).fill('influenza')
+  await page.getByLabel('Start date', { exact: true }).fill('2026-11-01')
+  await page.getByLabel('Edmonton', { exact: true }).check()
+  await page
+    .getByLabel('Situation summary', { exact: true })
+    .fill('Track reported influenza observations and response actions.')
+  await page.getByRole('button', { name: 'Save investigation', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Edmonton influenza response', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Available to link', exact: true }).click()
+  await page
+    .getByRole('checkbox', { name: /Select observation/ })
+    .first()
+    .check()
+  await page.getByRole('button', { name: 'Link selected', exact: true }).click()
+  await expect(page.locator('p.success')).toHaveText('Observations linked.')
+  await page.getByRole('button', { name: 'Linked', exact: true }).click()
+  await expect(page.locator('tbody tr')).toHaveCount(1)
+  await expect(page.getByRole('cell', { name: 'Edmonton', exact: true })).toBeVisible()
+  await page
+    .getByLabel('Situation update', { exact: true })
+    .fill('Response team reviewed the latest report.')
+  await page.getByRole('button', { name: 'Post update', exact: true }).click()
+  await expect(
+    page.getByText('Response team reviewed the latest report.', { exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Edit investigation', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('combobox', { name: 'Status', exact: true })
+    .selectOption('closed')
+  await page.getByLabel('End date', { exact: true }).fill('2026-11-03')
+  await page.getByRole('button', { name: 'Save investigation', exact: true }).click()
+  await expect(
+    page.getByText('Status changed from investigating to closed.', { exact: true }),
+  ).toBeVisible()
+  await page.screenshot({ path: 'test-results/investigation-detail.png', fullPage: true })
+  await page.getByRole('link', { name: 'Alerts', exact: true }).click()
+  await page.getByRole('button', { name: 'New alert rule' }).click()
+  await page.getByLabel('Rule name', { exact: true }).fill('Influenza review threshold')
+  await page.getByLabel('Disease (optional)', { exact: true }).fill('influenza')
+  await page.getByLabel('Case threshold', { exact: true }).fill('10')
+  await page.getByLabel('Reporting window (days)', { exact: true }).fill('7')
+  await page.getByRole('button', { name: 'Save rule', exact: true }).click()
+  await page.getByLabel('Evaluate through', { exact: true }).fill('2026-11-03')
+  await page.getByRole('button', { name: 'Evaluate rules', exact: true }).click()
+  await expect(page.locator('.alert-card').first()).toContainText('Influenza review threshold')
+  await page.getByRole('button', { name: 'Acknowledge', exact: true }).first().click()
+  await expect(page.locator('p.success')).toHaveText('Alert acknowledged.')
+  await page.getByRole('combobox', { name: 'Alert status', exact: true }).click()
+  await page.getByRole('option', { name: 'Acknowledged', exact: true }).click()
+  await page.getByRole('button', { name: 'Resolve', exact: true }).first().click()
+  await expect(page.locator('p.success')).toHaveText('Alert resolved.')
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Add location' }).click()
+  await page.route('**/api/locations/search?*', (route) =>
+    route.fulfill({
+      json: {
+        results: [
+          {
+            id: 'relation:canada',
+            name: 'Canada',
+            label: 'Canada',
+            latitude: 56,
+            longitude: -106,
+            administrative_level: 'country',
+            country: 'Canada',
+            country_code: 'CA',
+            region: '',
+          },
+        ],
+      },
+    }),
+  )
+  await page.getByLabel('Search for a place', { exact: true }).fill('Canada')
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await page.getByRole('button', { name: /Canada/ }).click()
+  await page.getByRole('button', { name: 'Save location', exact: true }).click()
+  await page.getByRole('link', { name: 'Data feeds', exact: true }).click()
+  await page.getByRole('button', { name: 'Connect feed', exact: false }).click()
+  await page.getByLabel('Feed name', { exact: true }).fill('WHO Canada weekly')
+  await page.getByRole('combobox', { name: 'Source country', exact: true }).selectOption('CA')
+  await page
+    .getByRole('combobox', { name: 'Saved country location', exact: true })
+    .selectOption({ label: 'Canada' })
+  await page.getByLabel('Import reports since', { exact: true }).fill('2026-01-01')
+  await page.getByRole('dialog').getByRole('button', { name: 'Connect feed', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'WHO Canada weekly', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Sync now', exact: true }).click()
+  await expect(page.locator('p.success')).toContainText('2 imported')
+  await expect(page.getByRole('cell', { name: 'success', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Sync now', exact: true }).click()
+  await expect(page.locator('p.success')).toContainText('2 unchanged')
+  await page.getByRole('button', { name: 'Pause', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeVisible()
+  await page.screenshot({ path: 'test-results/feed-history.png', fullPage: true })
+  await page.getByRole('link', { name: 'Reports & data', exact: true }).click()
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: 'Canada', exact: true }) })
+    .first()
+  await expect(row).toContainText('Weekly')
+  await row.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Observation history' })).toContainText(
+    'feed import',
+  )
 })

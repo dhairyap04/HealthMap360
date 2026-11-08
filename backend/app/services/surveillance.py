@@ -25,6 +25,10 @@ def snapshot(observation):
 
 
 def revision(db, observation, before, action, user_id=None, feed_id=None):
+    if observation.outbreak_id:
+        outbreak = db.get(Outbreak, observation.outbreak_id)
+        if outbreak:
+            outbreak.updated_at = utcnow()
     db.add(
         CaseRevision(
             case_id=None if action == "delete" else observation.id,

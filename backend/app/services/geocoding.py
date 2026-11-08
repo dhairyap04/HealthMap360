@@ -48,6 +48,7 @@ def _place(raw):
         "longitude": longitude,
         "administrative_level": str(raw.get("addresstype") or raw.get("type") or "place")[:100],
         "country": address.get("country", ""),
+        "country_code": str(address.get("country_code", "")).upper() or None,
         "region": address.get("state", ""),
     }
 

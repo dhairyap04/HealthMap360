@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -205,7 +205,10 @@ def case_history(case_id: int, db: Session = Depends(get_db)):
             "created_at": row.created_at,
         }
         for row in db.scalars(
-            select(CaseRevision).where(CaseRevision.case_id == case_id).order_by(CaseRevision.id.desc()).limit(100)
+            select(CaseRevision)
+            .where(or_(CaseRevision.case_id == case_id, CaseRevision.before["id"].as_integer() == case_id))
+            .order_by(CaseRevision.id.desc())
+            .limit(100)
         )
     ]
 

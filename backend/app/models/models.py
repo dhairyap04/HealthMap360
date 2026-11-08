@@ -33,6 +33,7 @@ class Location(Base):
     longitude = Column(Float, nullable=False)
     population = Column(Integer)
     administrative_level = Column(String(100))
+    country_code = Column(String(2))
     cases = relationship("Case", back_populates="location")
 
 
@@ -220,3 +221,9 @@ class CaseRevision(Base):
     before = Column(JSON)
     after = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class WorkerHeartbeat(Base):
+    __tablename__ = "worker_heartbeat"
+    id = Column(String(30), primary_key=True)
+    last_tick_at = Column(DateTime(timezone=True), nullable=False)

@@ -1,9 +1,9 @@
 """Disposable local server for browser tests; never connects to the user's database."""
 
 import os
-import subprocess
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 with tempfile.TemporaryDirectory(prefix="healthmap-e2e-") as directory:
@@ -28,9 +28,19 @@ with tempfile.TemporaryDirectory(prefix="healthmap-e2e-") as directory:
             )
         )
         db.commit()
-    result = subprocess.run(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8001"],
-        check=False,
-        cwd=Path(__file__).resolve().parents[1],
-    )
-    sys.exit(result.returncode)
+    # Browser tests use deterministic source records; production adapters have no test switch.
+    import uvicorn
+
+    from app.main import app
+    from app.services import feeds
+
+    feeds.load_who_rows = lambda: [
+        {
+            "Date_reported": (date.today() - timedelta(days=7)).isoformat(),
+            "Country_code": "CA",
+            "Country": "Canada",
+            "New_cases": "12",
+        },
+        {"Date_reported": date.today().isoformat(), "Country_code": "CA", "Country": "Canada", "New_cases": "8"},
+    ]
+    uvicorn.run(app, host="127.0.0.1", port=8001)

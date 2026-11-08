@@ -3,11 +3,14 @@
 import argparse
 import logging
 import time
+from datetime import timedelta
 
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.db.session import SessionLocal
-from app.models.models import Feed
+from app.models.models import Feed, WorkerHeartbeat
 from app.services.alerts import evaluate_alerts
 from app.services.feeds import sync_feed
 from app.services.surveillance import utcnow
@@ -34,21 +37,36 @@ def run_once():
             logger.exception("Could not process feed %s", feed_id)
     with SessionLocal() as db:
         evaluate_alerts(db)
+        insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
+        now = utcnow()
+        db.execute(
+            insert(WorkerHeartbeat)
+            .values(id="scheduler", last_tick_at=now)
+            .on_conflict_do_update(index_elements=["id"], set_={"last_tick_at": now})
+        )
         db.commit()
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run scheduled feed synchronization and alert checks")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--health", action="store_true")
     args = parser.parse_args()
+    if args.health:
+        with SessionLocal() as db:
+            heartbeat = db.get(WorkerHeartbeat, "scheduler")
+            tick = heartbeat.last_tick_at if heartbeat else None
+            aware = tick.replace(tzinfo=utcnow().tzinfo) if tick and tick.tzinfo is None else tick
+            raise SystemExit(0 if aware and utcnow() - aware < timedelta(minutes=5) else 1)
     logging.basicConfig(level=logging.INFO)
+    if args.once:
+        run_once()
+        return
     while True:
         try:
             run_once()
         except Exception:
             logger.exception("Worker tick failed; retrying")
-        if args.once:
-            break
         time.sleep(60)
 
 

@@ -72,7 +72,7 @@ New registrations always receive public access. Administrators grant roles in Se
 
 ## Data contract and import behavior
 
-A record is a **daily incident count for one disease at one location**. It is not a patient record, cumulative case count, active infection estimate, or medical recommendation. The unique observation key is `(location, date, disease)`. Distinct outbreaks of the same disease are not modeled separately yet.
+A record is a **reported count for one disease at one location and reporting date**, with a daily (1 day) or weekly (7 days) reporting period. It is not a patient record, cumulative case count, active infection estimate, or medical recommendation. The unique observation key is `(location, date, disease)`. Investigations are modeled separately and explicitly link eligible observations; assigning a location to an investigation does not automatically claim all of its cases.
 
 Required CSV columns:
 
@@ -84,7 +84,7 @@ Required CSV columns:
 | `case_count` | Whole number from 0 through 2,147,483,647 |
 | `severity` | `low`, `medium`, `high` or `critical`, case-insensitive |
 
-Optional columns: `source` (up to 300 characters), `latitude` (-90 to 90), and `longitude` (-180 to 180). Existing locations match names with case/whitespace normalization. New locations require both coordinates; known locations can omit them. Supplied coordinates must agree with the saved location. Use distinct names for places with the same name in different jurisdictions (for example `Springfield, Illinois`). CSV import does not geocode automatically. In Settings, use **Add location** to search for a place, select the correct region/country, and confirm it on the map. Coordinates are saved automatically, so subsequent CSV files can refer to the saved display name without coordinates.
+Optional columns: `reporting_period_days` (`1` for daily, `7` for weekly; defaults to `1`), `source` (up to 300 characters), `latitude` (-90 to 90), and `longitude` (-180 to 180). Existing locations match names with case/whitespace normalization. New locations require both coordinates; known locations can omit them. Supplied coordinates must agree with the saved location. Use distinct names for places with the same name in different jurisdictions (for example `Springfield, Illinois`). CSV import does not geocode automatically. In Settings, use **Add location** to search for a place, select the correct region/country, and confirm it on the map. Coordinates are saved automatically, so subsequent CSV files can refer to the saved display name without coordinates.
 
 The column mapper supports different source headers. Files must be UTF-8, at most 50 MB and 10,000 rows. Larger datasets must be split into files. Every row is validated on the server before writes. Invalid rows, conflicting records, or concurrent uniqueness conflicts abort the entire transaction; up to 50 row errors are returned. The UI displays 50 preview rows but validates the full file.
 
@@ -164,6 +164,28 @@ Use a dedicated test database whose account can create/drop schemas. Each API te
 
 Runtime Python dependencies are hash-locked in `backend/requirements.txt`; update their ranges in `requirements.in` and regenerate with `pip-compile --generate-hashes --strip-extras requirements.in`. Development dependencies are separately hash-locked from `requirements-dev.in`; regenerate them with `pip-compile --generate-hashes --strip-extras requirements-dev.in`. Frontend dependencies are locked by `package-lock.json` and installed with `npm ci`.
 
+## Investigations, alerts and live feeds
+
+**Investigations:** Open Investigations to create a named outbreak record with a disease, tracked locations, reporting dates, priority and owner. Its lifecycle is investigating → active → contained → closed, with explicit reopening supported. Closed investigations require an end date. Available observations must match the investigation's disease, locations and reporting dates; a record can belong to only one investigation. Linking/unlinking is explicit and atomic. Incompatible scope edits are rejected until affected observations are unlinked. Closing retains history and prevents link changes until reopening. Situation updates, ownership, lifecycle changes and link operations remain in the activity timeline. Case totals and charts include only linked observations.
+
+**Alerts:** Create a rule with a case threshold, a 1–90 day reporting-date window, optional disease/location scope and review priority. Each disease/location is evaluated separately. Case writes, CSV imports and feed syncs evaluate rules in the same transaction; the background worker evaluates them every minute. An evaluation date can be chosen for historical review. Alerts are deduplicated per rule, disease, location and evaluation date. Acknowledgment is shared across the response team; manual resolution suppresses the same rule/group/day until the next reporting-day evaluation. Rule edits re-evaluate the current day's event, and paused rules resolve their outstanding events. Previously raised alerts remain reviewable; in-app notifications are not email/SMS delivery or a medical classification.
+
+**Live source:** Data feeds provides the WHO weekly country-level COVID-19 CSV connector. Connect a WHO country code to a matching saved country; cities are rejected and country identity is checked using the search result's country code (or an exact source-country name for legacy records). Choose an import start date, refresh interval and review severity. The source does not provide the application's severity label, so this is explicitly analyst selected. Countries report with varying delays; the UI shows latest source dates, stale reporting, missing intervals and failures. Blank counts remain missing. Negative retrospective adjustments abort the entire selected interval for source review, rather than fabricating nonnegative observations.
+
+The adapter uses the official [WHO weekly download](https://srhdpeuwpubsa.blob.core.windows.net/whdh/COVID/WHO-COVID-19-global-data.csv) and [source methodology](https://data.who.int/dashboards/covid19/data). It never fetches a caller-supplied URL. Downloads have size/time limits and a 15-minute process cache. Repeated syncs skip identical records; changed counts owned by the same feed are revised with before/after history. Syncs cannot overwrite analyst-owned records or mix overlapping daily/weekly national reports. An explicit correction through Reports transfers ownership to the analyst; a subsequent conflicting sync requires review. Pausing retains existing observations.
+
+**Background processing:** Docker Compose starts the worker after database migrations and API readiness. For native development, run a third terminal using the same database and signing-key environment as the API:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python -m app.worker
+# One pass, suitable for an external scheduler:
+PYTHONPATH=backend backend/.venv/bin/python -m app.worker --once
+```
+
+Due jobs are claimed with durable five-minute leases. Interrupted runs are recorded when a lease is recovered; source failures are logged and retried on a bounded schedule. `/feeds/worker-status` and `python -m app.worker --health` expose worker liveness. Data feeds shows when scheduled refreshes are offline while retaining manual Sync now. Run history distinguishes imports, revisions, unchanged records and failures. The worker never sends messages outside the application.
+
+**Observation provenance:** Reports displays daily/weekly periods, investigation links, sources and a History action. New imports, analyst corrections, feed revisions and link changes are audited with before/after values. Old observations retain their original values and default daily period. These migrations preserve the original records; back up existing deployments before upgrading to the new schema.
+
 ## Remaining product decisions
 
-The implemented workflow is a functional foundation. Further work can add external surveillance feeds, separate outbreak identities, population-based incidence rates, alert thresholds, richer resource inventory/transfer histories, full edit audit trails, account recovery/email verification, centralized authentication, deployment rate limits/monitoring, and advanced spatial analysis. These are not silently simulated in the current application.
+The implemented next iteration covers a WHO live connector, scheduled syncs, in-app threshold alerts and investigation tracking. Further product work can add additional local and national adapters, pathogen-specific outbreak attribution, population-based incidence, resource transfer histories, account recovery/email verification, centralized authentication, external notification delivery, and deployment monitoring. Weekly report totals must not be interpreted as daily incidence or active infection estimates.

@@ -7,6 +7,7 @@ export type Location = {
   longitude: number
   population: number | null
   administrative_level: string | null
+  country_code: string | null
 }
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
 export type Observation = {
@@ -18,6 +19,9 @@ export type Observation = {
   case_count: number
   severity: Severity
   source: string | null
+  reporting_period_days: 1 | 7
+  outbreak_id: number | null
+  feed_id: number | null
 }
 export type Resource = {
   id: number
@@ -77,5 +81,6 @@ export type PlaceResult = {
   longitude: number
   administrative_level: string
   country: string
+  country_code?: string | null
   region: string
 }

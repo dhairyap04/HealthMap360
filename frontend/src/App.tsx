@@ -7,6 +7,9 @@ const MapPage = lazy(() => import('./pages/Map'))
 const Reports = lazy(() => import('./pages/Reports'))
 const Resources = lazy(() => import('./pages/Resources'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Outbreaks = lazy(() => import('./pages/Outbreaks'))
+const Alerts = lazy(() => import('./pages/Alerts'))
+const Feeds = lazy(() => import('./pages/Feeds'))
 import Login from './pages/Login'
 
 export default function App() {
@@ -30,6 +33,9 @@ export default function App() {
             ['/', 'Overview', '◫'],
             ['/map', 'Outbreak map', '◎'],
             ['/reports', 'Reports & data', '▤'],
+            ['/outbreaks', 'Investigations', '◉'],
+            ['/alerts', 'Alerts', '◇'],
+            ['/feeds', 'Data feeds', '⇄'],
             ['/resources', 'Resources', '▦'],
             ['/settings', 'Settings', '⚙'],
           ].map(([path, label, icon]) => (
@@ -81,14 +87,16 @@ export default function App() {
               <Route path="/map" element={<MapPage />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/resources" element={<Resources />} />
+              <Route path="/outbreaks" element={<Outbreaks />} />
+              <Route path="/outbreaks/:id" element={<Outbreaks />} />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/feeds" element={<Feeds />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </main>
-        <footer>
-          HealthMap360 · Counts represent reported daily cases, not active infections.
-        </footer>
+        <footer>HealthMap360 · Counts represent reported cases, not active infections.</footer>
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import Papa from 'papaparse'
 export const MAX_ROWS = 10000
 export const MAX_BYTES = 50 * 1024 * 1024
 export const REQUIRED_FIELDS = ['date', 'location', 'disease', 'case_count', 'severity'] as const
-export const OPTIONAL_FIELDS = ['source', 'latitude', 'longitude'] as const
+export const OPTIONAL_FIELDS = ['source', 'latitude', 'longitude', 'reporting_period_days'] as const
 export type RequiredField = (typeof REQUIRED_FIELDS)[number]
 export type CsvField = RequiredField | (typeof OPTIONAL_FIELDS)[number]
 export type RawCsvRow = Record<string, string>
@@ -63,6 +63,7 @@ export function guessMapping(fields: string[]): ColumnMapping {
     case_count: ['case_count', 'cases', 'count'],
     severity: ['severity', 'level'],
     source: ['source'],
+    reporting_period_days: ['reporting_period_days', 'period_days'],
     latitude: ['latitude', 'lat'],
     longitude: ['longitude', 'lon', 'lng'],
   }
@@ -91,6 +92,12 @@ export function validateRows(rows: RawCsvRow[], mapping: ColumnMapping): RowVali
       issues.push({ field: 'location', message: 'Location is required (maximum 200 characters)' })
     if (!value('disease') || value('disease').length > 120)
       issues.push({ field: 'disease', message: 'Disease is required (maximum 120 characters)' })
+    const period = value('reporting_period_days')
+    if (period && !['1', '7'].includes(period))
+      issues.push({
+        field: 'reporting_period_days',
+        message: 'Use 1 for daily or 7 for weekly reports',
+      })
     const count = value('case_count')
     if (!/^\d+$/.test(count) || !Number.isSafeInteger(Number(count)) || Number(count) > 2147483647)
       issues.push({
