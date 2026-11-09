@@ -765,3 +765,38 @@ test('regional weekly review compares evidence, qualifies rates and hands off to
     .toBe(true)
   await page.screenshot({ path: 'test-results/weekly-review-mobile.png', fullPage: true })
 })
+
+test('weekly review demo explains calculations without creating surveillance records', async ({
+  page,
+}) => {
+  await page.goto('/#/review?demo=complete')
+  await page.getByLabel('Username', { exact: true }).fill('browser_admin')
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Demo walkthrough' })).toContainText(
+    'FICTIONAL DEMO',
+  )
+  const area = page.getByRole('region', { name: 'Alberta · fictional training area weekly review' })
+  await expect(area).toContainText('+50 reported cases')
+  await expect(area).toContainText('(+50%)')
+  await expect(area).toContainText('Reported cases per 100,000 people: 15')
+  await expect(page.getByRole('button', { name: 'Start investigation', exact: true })).toHaveCount(
+    0,
+  )
+  await expect(page.getByRole('button', { name: 'Load PHAC laboratory context' })).toHaveCount(0)
+  await page.getByRole('link', { name: '2. Incomplete reporting', exact: true }).click()
+  await expect(area).toContainText('3 / 7')
+  await expect(area).toContainText('Week-to-week change: Unavailable')
+  await expect(area).toContainText('Reported cases per 100,000 people: Unavailable')
+  await page.getByRole('link', { name: '3. Missing population', exact: true }).click()
+  await expect(area).toContainText('+50 reported cases')
+  await expect(area).toContainText('Reported cases per 100,000 people: Unavailable')
+  const pending = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export private review', exact: true }).click()
+  const downloaded = await pending
+  const body = JSON.parse(await readFile((await downloaded.path())!, 'utf8'))
+  expect(body.demonstration).toBe(true)
+  expect(body.status).toBe('fictional_demonstration_not_for_publication')
+  await page.getByRole('link', { name: 'Return to live review', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Demo walkthrough' })).toHaveCount(0)
+})

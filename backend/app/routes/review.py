@@ -104,3 +104,53 @@ def lab_context(location_id: int = Query(gt=0), date_to: date | None = None, db:
         raise HTTPException(422, "Select a Canadian province or territory with a region identifier in Settings.")
     rows, retrieved_at = laboratory.load_laboratory()
     return laboratory.laboratory_context(location, end, rows, retrieved_at)
+
+
+@router.get("/demo")
+def demonstration(scenario: Literal["complete", "incomplete", "population"] = "complete"):
+    """In-memory training examples only; no database dependency or source download."""
+    from types import SimpleNamespace
+
+    end = date(2026, 10, 31)
+    location = SimpleNamespace(
+        id=0,
+        name="Alberta · fictional training area",
+        population=1000000,
+        population_year=2026,
+        population_source="https://example.com/fictional-population",
+        population_area_confirmed=True,
+    )
+
+    def observation(day, count, period=7):
+        return SimpleNamespace(
+            date=day,
+            case_count=count,
+            reporting_period_days=period,
+            quality_status="valid",
+            provenance="demo",
+            source="Synthetic demonstration reports — not real surveillance",
+        )
+
+    rows = [observation(end - timedelta(days=7), 100)]
+    if scenario == "incomplete":
+        rows.extend(observation(end - timedelta(days=i), 20, 1) for i in range(3))
+    else:
+        rows.append(observation(end, 150))
+    if scenario == "population":
+        location.population_year = None
+        location.population_area_confirmed = False
+    area = area_review(location, rows, end, illustrative=True)
+    area["investigations"] = []
+    return {
+        "demonstration": True,
+        "scenario": scenario,
+        "generated_at": utcnow(),
+        "disease": "influenza",
+        "geographic_scope": "regional",
+        "date_from": end - timedelta(days=6),
+        "date_to": end,
+        "historical": False,
+        "areas": [area],
+        "truncated": False,
+        "note": "Fictional training example. Counts, population and calculated changes are illustrative only. Nothing is saved, synchronized or published. Real demo-tagged observations remain excluded from comparisons in the live workspace.",
+    }

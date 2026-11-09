@@ -29,6 +29,8 @@ export type ReviewArea = {
   investigations: { id: number; title: string; status: string; owner_id: number }[]
 }
 export type WeeklyReview = {
+  demonstration?: boolean
+  scenario?: string
   generated_at: string
   disease: string
   geographic_scope: string

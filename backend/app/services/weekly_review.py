@@ -47,12 +47,13 @@ def reporting_window(rows, start, end):
     }
 
 
-def area_review(location, rows, end):
+def area_review(location, rows, end, *, illustrative=False):
     start = end - timedelta(days=6)
     current = reporting_window(rows, start, end)
     previous = reporting_window(rows, start - timedelta(days=7), start - timedelta(days=1))
+    eligible_states = {"complete", "demonstration"} if illustrative else {"complete"}
     reason = None
-    if current["state"] != "complete" or previous["state"] != "complete":
+    if current["state"] not in eligible_states or previous["state"] not in eligible_states:
         reason = "Both weeks need complete, non-conflicting, sourced coverage before comparison."
     elif current["sources"] != previous["sources"]:
         reason = "The reporting source changed between weeks."
@@ -63,7 +64,7 @@ def area_review(location, rows, end):
         round(delta / previous["reported_cases"] * 100, 1) if not reason and previous["reported_cases"] else None
     )
     rate_reason = None
-    if current["state"] != "complete":
+    if current["state"] not in eligible_states:
         rate_reason = "A complete, sourced reporting week is required."
     elif not (
         location.population

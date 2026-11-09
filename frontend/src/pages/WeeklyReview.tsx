@@ -16,8 +16,10 @@ export default function WeeklyReview() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const today = useWorkspaceDate()
-  const locations = useApi<Location[]>('/locations')
-  const diseases = useApi<string[]>('/diseases')
+  const demo = params.get('demo')
+  const isDemo = demo !== null
+  const locations = useApi<Location[]>(isDemo ? null : '/locations')
+  const diseases = useApi<string[]>(isDemo ? null : '/diseases')
   const scope = (
     ['local', 'regional', 'national'].includes(params.get('geographic_scope') || '')
       ? params.get('geographic_scope')
@@ -32,14 +34,16 @@ export default function WeeklyReview() {
   const disease = params.get('disease') || 'covid-19'
   const end = params.get('date_to') || ''
   const review = useApi<Review>(
-    locations.loading
-      ? null
-      : `/review/weekly${query({ geographic_scope: scope, country_code: 'CA', location_id: locationId, disease, date_to: end })}`,
+    isDemo
+      ? `/review/demo${query({ scenario: demo || 'complete' })}`
+      : locations.loading
+        ? null
+        : `/review/weekly${query({ geographic_scope: scope, country_code: 'CA', location_id: locationId, disease, date_to: end })}`,
   )
   const selected = available.find((l) => String(l.id) === locationId)
   const [laboratoryRequest, setLaboratoryRequest] = useState<string | null>(null)
   const contextPath =
-    selected?.geographic_scope === 'regional' && selected.region_code
+    !isDemo && selected?.geographic_scope === 'regional' && selected.region_code
       ? `/review/laboratory${query({ location_id: selected.id, date_to: end })}`
       : null
   const laboratory = useApi<LaboratoryContext>(
@@ -58,7 +62,9 @@ export default function WeeklyReview() {
   function download() {
     if (!review.data) return
     const body = {
-      status: 'private_working_review_not_approved_for_publication',
+      status: isDemo
+        ? 'fictional_demonstration_not_for_publication'
+        : 'private_working_review_not_approved_for_publication',
       ...review.data,
       analyst_notes: notes,
       laboratory_context: contextPath && laboratoryRequest === contextPath ? laboratory.data : null,
@@ -86,63 +92,111 @@ export default function WeeklyReview() {
           Export private review
         </button>
       </div>
-      <section className="panel">
-        <p>
-          Designed for regional public-health analysts, starting with respiratory surveillance in
-          Alberta. Select one disease and reporting week; each area is reviewed separately.
-        </p>
-        <div className="filters">
-          <FilterSelect
-            label="Review geography"
-            value={scope}
-            onChange={(v) => change('geographic_scope', v)}
-            options={['regional', 'local', 'national'].map((value) => ({
-              value,
-              label: value[0].toUpperCase() + value.slice(1),
-            }))}
-          />
-          <FilterSelect
-            label="Review area"
-            value={locationId}
-            onChange={(v) => change('location_id', v)}
-            options={[
-              { value: '', label: 'All Canadian reporting areas' },
-              ...available.map((l) => ({ value: String(l.id), label: l.name })),
-            ]}
-          />
-          <FilterSelect
-            label="Review disease"
-            value={disease}
-            onChange={(v) => change('disease', v)}
-            options={[...new Set(['covid-19', 'influenza', 'rsv', ...(diseases.data || [])])].map(
-              (value) => ({ value, label: value }),
-            )}
-          />
-          <label>
-            Week ending
-            <input
-              type="date"
-              aria-label="Review week ending"
-              max={today}
-              value={end || review.data?.date_to || ''}
-              onChange={(e) => change('date_to', e.target.value)}
+      <div className="actions" style={{ marginBottom: 20 }}>
+        <Link className="button" to={isDemo ? '/review' : '/review?demo=complete'}>
+          {isDemo ? 'Return to live review' : 'Try a fictional demo'}
+        </Link>
+      </div>
+      {isDemo ? (
+        <section className="panel" aria-label="Demo walkthrough">
+          <span className="status-pill">FICTIONAL DEMO · READ ONLY</span>
+          <h2>Learn the weekly review</h2>
+          <p>
+            These examples use a fictional Alberta reporting area, influenza counts and a population
+            of 1,000,000. They do not describe actual disease activity.
+          </p>
+          <div className="actions">
+            <Link
+              className={`button ${demo === 'complete' ? 'primary' : ''}`}
+              to="/review?demo=complete"
+            >
+              1. Complete reporting
+            </Link>
+            <Link
+              className={`button ${demo === 'incomplete' ? 'primary' : ''}`}
+              to="/review?demo=incomplete"
+            >
+              2. Incomplete reporting
+            </Link>
+            <Link
+              className={`button ${demo === 'population' ? 'primary' : ''}`}
+              to="/review?demo=population"
+            >
+              3. Missing population
+            </Link>
+          </div>
+          <p>
+            {demo === 'incomplete'
+              ? 'Only three days are reported this week. The app shows the 60 recorded cases, but withholds the comparison and rate because four days are missing.'
+              : demo === 'population'
+                ? 'The weeks are complete, so 100 → 150 is a 50% increase. The rate remains unavailable because the population reference year and coverage are unconfirmed.'
+                : 'Compare 100 cases in the previous week with 150 in the selected week: 50 more cases, a 50% increase. With a fictional population of 1,000,000, the selected week equals 15 reported cases per 100,000.'}
+          </p>
+          <p className="muted">
+            In a real review, check sources and existing investigations, then assign an owner and
+            explicitly link relevant observations. Demo records cannot start investigations or be
+            published.
+          </p>
+        </section>
+      ) : (
+        <section className="panel">
+          <p>
+            Designed for regional public-health analysts, starting with respiratory surveillance in
+            Alberta. Select one disease and reporting week; each area is reviewed separately.
+          </p>
+          <div className="filters">
+            <FilterSelect
+              label="Review geography"
+              value={scope}
+              onChange={(v) => change('geographic_scope', v)}
+              options={['regional', 'local', 'national'].map((value) => ({
+                value,
+                label: value[0].toUpperCase() + value.slice(1),
+              }))}
             />
-          </label>
-        </div>
-        <small className="muted">
-          Default: latest Saturday. Weekly source reports must align with the selected seven-day
-          window; dates are never prorated.
-        </small>
-      </section>
+            <FilterSelect
+              label="Review area"
+              value={locationId}
+              onChange={(v) => change('location_id', v)}
+              options={[
+                { value: '', label: 'All Canadian reporting areas' },
+                ...available.map((l) => ({ value: String(l.id), label: l.name })),
+              ]}
+            />
+            <FilterSelect
+              label="Review disease"
+              value={disease}
+              onChange={(v) => change('disease', v)}
+              options={[...new Set(['covid-19', 'influenza', 'rsv', ...(diseases.data || [])])].map(
+                (value) => ({ value, label: value }),
+              )}
+            />
+            <label>
+              Week ending
+              <input
+                type="date"
+                aria-label="Review week ending"
+                max={today}
+                value={end || review.data?.date_to || ''}
+                onChange={(e) => change('date_to', e.target.value)}
+              />
+            </label>
+          </div>
+          <small className="muted">
+            Default: latest Saturday. Weekly source reports must align with the selected seven-day
+            window; dates are never prorated.
+          </small>
+        </section>
+      )}
       <LoadState
-        loading={locations.loading || review.loading}
+        loading={(!isDemo && locations.loading) || review.loading}
         error={locations.error || review.error}
         retry={() => {
           locations.reload()
           review.reload()
         }}
       />
-      {review.data && (
+      {review.data && Boolean(review.data.demonstration) === isDemo && (
         <>
           <p className="notice">{review.data.note}</p>
           <p>
@@ -226,15 +280,19 @@ export default function WeeklyReview() {
               {area.rate.unavailable_reason ? (
                 <p className="muted">
                   {area.rate.unavailable_reason}{' '}
-                  <Link to="/settings">Review population details →</Link>
+                  {!isDemo && <Link to="/settings">Review population details →</Link>}
                 </p>
               ) : (
                 <p className="muted">
                   Population {display(area.rate.population)} · reference year{' '}
                   {area.rate.reference_year} ·{' '}
-                  <a href={area.rate.source_url || undefined} target="_blank" rel="noreferrer">
-                    Population source ↗
-                  </a>
+                  {isDemo ? (
+                    <span>Fictional denominator for training</span>
+                  ) : (
+                    <a href={area.rate.source_url || undefined} target="_blank" rel="noreferrer">
+                      Population source ↗
+                    </a>
+                  )}
                   . Crude reported-case rate; not an individual risk estimate.
                 </p>
               )}
@@ -244,15 +302,17 @@ export default function WeeklyReview() {
                 {area.current.reporting_periods.map((days) => `${days}-day`).join(', ') ||
                   'Unavailable'}
               </p>
-              <div className="actions">
-                <Link
-                  className="button"
-                  to={`/reports${query({ location_id: area.location_id, disease, date_from: area.current.date_from, date_to: area.current.date_to })}`}
-                >
-                  Review supporting reports
-                </Link>
-                <button onClick={() => setInvestigate(area)}>Start investigation</button>
-              </div>
+              {!isDemo && (
+                <div className="actions">
+                  <Link
+                    className="button"
+                    to={`/reports${query({ location_id: area.location_id, disease, date_from: area.current.date_from, date_to: area.current.date_to })}`}
+                  >
+                    Review supporting reports
+                  </Link>
+                  <button onClick={() => setInvestigate(area)}>Start investigation</button>
+                </div>
+              )}
               {!!area.investigations.length && (
                 <div>
                   <p>Existing open investigations — check these before creating another:</p>
@@ -267,85 +327,87 @@ export default function WeeklyReview() {
               )}
             </section>
           ))}
-          <section className="panel">
-            <h2>Provincial laboratory context</h2>
-            <p>
-              Official PHAC test positivity is a separate indicator. Detections are laboratory
-              results, not additional case observations, and are never added to case totals.
-            </p>
-            {contextPath ? (
-              <button
-                onClick={() => {
-                  setLaboratoryRequest(contextPath)
-                  laboratory.reload()
-                }}
-                disabled={laboratoryRequest === contextPath && laboratory.loading}
-              >
-                Load PHAC laboratory context
-              </button>
-            ) : (
-              <p className="muted">
-                Select a Canadian province or territory with a region identifier to load its
-                laboratory data. City-level estimates are not provided.
+          {!isDemo && (
+            <section className="panel">
+              <h2>Provincial laboratory context</h2>
+              <p>
+                Official PHAC test positivity is a separate indicator. Detections are laboratory
+                results, not additional case observations, and are never added to case totals.
               </p>
-            )}
-            {laboratoryRequest === contextPath && contextPath && (
-              <LoadState
-                loading={laboratory.loading}
-                error={laboratory.error}
-                retry={laboratory.reload}
-              />
-            )}
-            {contextPath && laboratoryRequest === contextPath && laboratory.data && (
-              <>
-                <p>
-                  {laboratory.data.source_name} · {laboratory.data.reporting_area} · week ending{' '}
-                  {laboratory.data.latest_report_date || 'unavailable'}
-                  {laboratory.data.historical ? ' · Historical data' : ''}
-                </p>
+              {contextPath ? (
+                <button
+                  onClick={() => {
+                    setLaboratoryRequest(contextPath)
+                    laboratory.reload()
+                  }}
+                  disabled={laboratoryRequest === contextPath && laboratory.loading}
+                >
+                  Load PHAC laboratory context
+                </button>
+              ) : (
                 <p className="muted">
-                  Retrieved {dateTime(laboratory.data.retrieved_at)}. This source week may differ
-                  from your selected case week.
+                  Select a Canadian province or territory with a region identifier to load its
+                  laboratory data. City-level estimates are not provided.
                 </p>
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Virus</th>
-                        <th>Tests</th>
-                        <th>Detections</th>
-                        <th>Tests positive</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {laboratory.data.indicators.map((item) => (
-                        <tr key={item.virus}>
-                          <td>{item.virus}</td>
-                          <td>{display(item.tests)}</td>
-                          <td>{display(item.detections)}</td>
-                          <td>
-                            {item.percent_positive === null
-                              ? 'Unavailable'
-                              : `${item.percent_positive}%`}
-                          </td>
+              )}
+              {laboratoryRequest === contextPath && contextPath && (
+                <LoadState
+                  loading={laboratory.loading}
+                  error={laboratory.error}
+                  retry={laboratory.reload}
+                />
+              )}
+              {contextPath && laboratoryRequest === contextPath && laboratory.data && (
+                <>
+                  <p>
+                    {laboratory.data.source_name} · {laboratory.data.reporting_area} · week ending{' '}
+                    {laboratory.data.latest_report_date || 'unavailable'}
+                    {laboratory.data.historical ? ' · Historical data' : ''}
+                  </p>
+                  <p className="muted">
+                    Retrieved {dateTime(laboratory.data.retrieved_at)}. This source week may differ
+                    from your selected case week.
+                  </p>
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Virus</th>
+                          <th>Tests</th>
+                          <th>Detections</th>
+                          <th>Tests positive</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="muted">{laboratory.data.limitations}</p>
-                <div className="actions">
-                  <a href={laboratory.data.source_url} target="_blank" rel="noreferrer">
-                    Official download ↗
-                  </a>
-                  <a href={laboratory.data.methodology_url} target="_blank" rel="noreferrer">
-                    Definitions and methodology ↗
-                  </a>
-                </div>
-              </>
-            )}
-          </section>
-          <section className="panel">
+                      </thead>
+                      <tbody>
+                        {laboratory.data.indicators.map((item) => (
+                          <tr key={item.virus}>
+                            <td>{item.virus}</td>
+                            <td>{display(item.tests)}</td>
+                            <td>{display(item.detections)}</td>
+                            <td>
+                              {item.percent_positive === null
+                                ? 'Unavailable'
+                                : `${item.percent_positive}%`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="muted">{laboratory.data.limitations}</p>
+                  <div className="actions">
+                    <a href={laboratory.data.source_url} target="_blank" rel="noreferrer">
+                      Official download ↗
+                    </a>
+                    <a href={laboratory.data.methodology_url} target="_blank" rel="noreferrer">
+                      Definitions and methodology ↗
+                    </a>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+          <section className="panel form-stack">
             <h2>Review notes and handoff</h2>
             <label>
               Analyst notes
@@ -362,11 +424,11 @@ export default function WeeklyReview() {
               investigation for a persistent owner and activity history. Publishing requires the
               separate Publication review process.
             </p>
-            <Link to="/publications">Open publication review →</Link>
+            {!isDemo && <Link to="/publications">Open publication review →</Link>}
           </section>
         </>
       )}
-      {investigate && review.data && (
+      {!isDemo && investigate && review.data && (
         <Dialog title="Start investigation from weekly review" close={() => setInvestigate(null)}>
           <p>
             Review the owner and response priority. Supporting observations must be linked

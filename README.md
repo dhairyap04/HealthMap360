@@ -202,6 +202,10 @@ The review can load a separate read-only **PHAC FluWatch+ provincial laboratory 
 
 See [product direction and pilot acceptance plan](docs/PRODUCT_DIRECTION.md) for scope, interpretation rules and unperformed user research. A real Alberta incident-case connector, partner recruitment, interviews and user acceptance are external follow-up work; none is represented as complete.
 
+### Interactive fictional demo
+
+Open **Weekly review → Try a fictional demo** (or `/#/review?demo=complete`). Switch between complete reporting (100 → 150 cases, +50%, 15 per 100,000 with a fictional population of one million), incomplete reporting (three days, comparisons withheld), and an unverified denominator (comparison available, rate withheld). All data is generated in memory: no locations, observations or investigations are created. Demo exports are explicitly marked fictional; live source retrieval and investigation/publication actions are hidden. Demo-tagged saved observations remain excluded from live comparisons and rates.
+
 ## Remaining product decisions
 
 The implemented next iteration covers a WHO live connector, scheduled syncs, in-app threshold alerts and investigation tracking. Further product work can add additional local and national adapters, pathogen-specific outbreak attribution, population-based incidence, resource transfer histories, self-service verified email delivery, centralized authentication, external notification delivery, and hosted monitoring integration. Weekly report totals must not be interpreted as daily incidence or active infection estimates.

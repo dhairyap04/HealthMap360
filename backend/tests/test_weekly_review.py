@@ -306,3 +306,53 @@ def test_population_migration_preserves_deleted_id_high_water_and_old_estimates(
         ).fetchone() == (1000, None, None, 0)
         db.execute("INSERT INTO locations (name,name_key,latitude,longitude) VALUES ('Next','next',0,0)")
         assert db.execute("SELECT id FROM locations WHERE name_key='next'").fetchone()[0] > 100
+
+
+def test_read_only_demo_has_three_scenarios_and_preserves_live_demo_safeguard(client, auth, database):
+    from app.models.models import Location, Outbreak, Publication
+    from app.services.weekly_review import reporting_window
+
+    for scenario in ("complete", "incomplete", "population"):
+        response = client.get("/review/demo", headers=auth["analyst"], params={"scenario": scenario})
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["demonstration"] is True and result["scenario"] == scenario
+        row = result["areas"][0]
+        assert row["investigations"] == [] and row["location_id"] == 0
+        if scenario == "incomplete":
+            assert row["current"]["covered_days"] == 3 and row["current"]["reported_cases"] == 60
+            assert row["comparison"]["absolute_change"] is None
+            assert row["rate"]["reported_cases_per_100000"] is None
+        else:
+            assert row["current"]["reported_cases"] == 150
+            assert row["comparison"]["absolute_change"] == 50 and row["comparison"]["percent_change"] == 50
+            assert row["rate"]["reported_cases_per_100000"] == (15 if scenario == "complete" else None)
+    assert client.get("/review/demo").status_code == 401
+    assert client.get("/review/demo", headers=auth["reader"]).status_code == 403
+    assert client.get("/review/demo?scenario=unknown", headers=auth["analyst"]).status_code == 422
+    with Session(database) as db:
+        for model in (Location, Case, Outbreak, Publication, LocationEvent):
+            assert db.scalar(select(func.count(model.id))) == 0
+    # The shared live calculation still withholds comparisons for demo-tagged records.
+    location = SimpleNamespace(
+        id=1,
+        name="Demo",
+        population=1000000,
+        population_year=2025,
+        population_source="https://example.com",
+        population_area_confirmed=True,
+    )
+    rows = [
+        SimpleNamespace(
+            date=day,
+            case_count=count,
+            reporting_period_days=7,
+            quality_status="valid",
+            source="Demo data",
+            provenance="demo",
+        )
+        for day, count in [(END - timedelta(days=7), 100), (END, 150)]
+    ]
+    assert reporting_window(rows, END - timedelta(days=6), END)["state"] == "demonstration"
+    assert area_review(location, rows, END)["comparison"]["absolute_change"] is None
+    assert area_review(location, rows, END)["rate"]["reported_cases_per_100000"] is None
