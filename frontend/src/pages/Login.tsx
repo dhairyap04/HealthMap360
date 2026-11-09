@@ -38,7 +38,7 @@ export default function Login() {
   }
   return (
     <div className="login-layout">
-      <div className="login-intro">
+      <aside className="login-intro" aria-label="About HealthMap360">
         <div className="brand-mark">
           H<span>+</span>
         </div>
@@ -51,7 +51,7 @@ export default function Login() {
         <div className="login-note">
           HealthMap360 · Reported observations, shared understanding.
         </div>
-      </div>
+      </aside>
       <main className="login-card">
         <p className="eyebrow">HEALTHMAP360</p>
         <h2>{register ? 'Create your account' : 'Welcome back'}</h2>

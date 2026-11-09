@@ -304,16 +304,21 @@ function OutbreakDetail({ id }: { id: number }) {
             {records.data && (
               <>
                 {records.data.items.length ? (
-                  <div className="table-scroll">
+                  <div
+                    className="table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Investigation observations"
+                  >
                     <table>
                       <thead>
                         <tr>
-                          {writable && <th>Select</th>}
-                          <th>Report date</th>
-                          <th>Location</th>
-                          <th>Cases</th>
-                          <th>Period</th>
-                          <th>Source</th>
+                          {writable && <th scope="col">Select</th>}
+                          <th scope="col">Report date</th>
+                          <th scope="col">Location</th>
+                          <th scope="col">Cases</th>
+                          <th scope="col">Period</th>
+                          <th scope="col">Source</th>
                         </tr>
                       </thead>
                       <tbody>

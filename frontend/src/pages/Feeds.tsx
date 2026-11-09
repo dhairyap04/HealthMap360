@@ -241,17 +241,22 @@ export default function Feeds() {
           <LoadState loading={history.loading} error={history.error} retry={history.reload} />
           {history.data &&
             (history.data.length ? (
-              <div className="table-scroll">
+              <div
+                className="table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Feed synchronization history"
+              >
                 <table>
                   <thead>
                     <tr>
-                      <th>Started</th>
-                      <th>Status</th>
-                      <th>New</th>
-                      <th>Revised</th>
-                      <th>Unchanged</th>
-                      <th>Latest source report</th>
-                      <th>Details</th>
+                      <th scope="col">Started</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">New</th>
+                      <th scope="col">Revised</th>
+                      <th scope="col">Unchanged</th>
+                      <th scope="col">Latest source report</th>
+                      <th scope="col">Details</th>
                     </tr>
                   </thead>
                   <tbody>

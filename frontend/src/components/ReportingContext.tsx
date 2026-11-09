@@ -25,13 +25,24 @@ export default function ReportingContext({ view }: { view: Summary['view'] }) {
       <p className="muted">
         {view.reporting_periods.length
           ? view.reporting_periods
-              .map((p) => (p === 7 ? 'Weekly reports' : 'Daily reports'))
+              .map((period) => (period === 7 ? 'Weekly reports' : 'Daily reports'))
               .join(' + ')
-          : 'No reports in this window'}
-        . Counts are attributed to report dates; weekly reports cover the preceding seven days.
-        Missing reports do not mean zero cases. National, regional and local totals are kept
-        separate.
+          : 'No reports in this window'}{' '}
+        · Missing reports do not mean zero.
       </p>
+      <details className="context-details">
+        <summary>How to read these reports</summary>
+        <p className="muted">
+          {view.reporting_periods.length
+            ? view.reporting_periods
+                .map((p) => (p === 7 ? 'Weekly reports' : 'Daily reports'))
+                .join(' + ')
+            : 'No reports in this window'}
+          . Counts are attributed to report dates; weekly reports cover the preceding seven days.
+          Missing reports do not mean zero cases. National, regional and local totals are kept
+          separate.
+        </p>
+      </details>
       {view.sources.length > 0 && (
         <small className="muted">Sources: {view.sources.join(' · ')}</small>
       )}

@@ -115,15 +115,20 @@ export default function Resources() {
           {!resources.data.length ? (
             <p className="empty">No resources in this view.</p>
           ) : (
-            <div className="table-scroll">
+            <div
+              className="table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Resource inventory"
+            >
               <table>
                 <thead>
                   <tr>
-                    <th>Resource</th>
-                    <th>Quantity</th>
-                    <th>Assigned location</th>
-                    <th>Allocation date</th>
-                    {writable && <th>Actions</th>}
+                    <th scope="col">Resource</th>
+                    <th scope="col">Quantity</th>
+                    <th scope="col">Assigned location</th>
+                    <th scope="col">Allocation date</th>
+                    {writable && <th scope="col">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>

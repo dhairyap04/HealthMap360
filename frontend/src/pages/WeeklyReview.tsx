@@ -198,7 +198,17 @@ export default function WeeklyReview() {
       />
       {review.data && Boolean(review.data.demonstration) === isDemo && (
         <>
-          <p className="notice">{review.data.note}</p>
+          <section className="review-method">
+            <strong>
+              {isDemo
+                ? 'Fictional training data · read only'
+                : 'Private working review · verify coverage before comparing'}
+            </strong>
+            <details>
+              <summary>Method and interpretation</summary>
+              <p>{review.data.note}</p>
+            </details>
+          </section>
           <p>
             {review.data.date_from} – {review.data.date_to} · generated{' '}
             {dateTime(review.data.generated_at)}
@@ -229,14 +239,19 @@ export default function WeeklyReview() {
                 <h2>{area.location_name}</h2>
                 <span className="status-pill">{area.current.state.replaceAll('_', ' ')}</span>
               </div>
-              <div className="table-scroll">
+              <div
+                className="table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Weekly reporting windows"
+              >
                 <table>
                   <thead>
                     <tr>
-                      <th>Reporting window</th>
-                      <th>Reported cases</th>
-                      <th>Days covered</th>
-                      <th>Review state</th>
+                      <th scope="col">Reporting window</th>
+                      <th scope="col">Reported cases</th>
+                      <th scope="col">Days covered</th>
+                      <th scope="col">Review state</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -368,14 +383,19 @@ export default function WeeklyReview() {
                     Retrieved {dateTime(laboratory.data.retrieved_at)}. This source week may differ
                     from your selected case week.
                   </p>
-                  <div className="table-scroll">
+                  <div
+                    className="table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Laboratory indicators"
+                  >
                     <table>
                       <thead>
                         <tr>
-                          <th>Virus</th>
-                          <th>Tests</th>
-                          <th>Detections</th>
-                          <th>Tests positive</th>
+                          <th scope="col">Virus</th>
+                          <th scope="col">Tests</th>
+                          <th scope="col">Detections</th>
+                          <th scope="col">Tests positive</th>
                         </tr>
                       </thead>
                       <tbody>

@@ -211,13 +211,18 @@ export default function PublicPortal() {
               <details>
                 <summary>Reporting timeline and methodology</summary>
                 <p className="prose-text">{report.methodology}</p>
-                <div className="table-scroll">
+                <div
+                  className="table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Published reporting values"
+                >
                   <table>
                     <thead>
                       <tr>
-                        <th>Report date</th>
-                        <th>Reporting period</th>
-                        <th>Reported cases</th>
+                        <th scope="col">Report date</th>
+                        <th scope="col">Reporting period</th>
+                        <th scope="col">Reported cases</th>
                       </tr>
                     </thead>
                     <tbody>

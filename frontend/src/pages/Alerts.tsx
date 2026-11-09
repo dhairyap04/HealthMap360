@@ -113,14 +113,6 @@ export default function Alerts() {
   const current = editing && editing !== 'new' ? editing : null
   return (
     <>
-      <label className="check-option">
-        <input
-          type="checkbox"
-          checked={historical}
-          onChange={(e) => setHistorical(e.target.checked)}
-        />
-        Historical exercises (separate from current alerts)
-      </label>
       <div className="page-heading">
         <div>
           <p className="eyebrow">SIGNALS & FOLLOW-UP</p>
@@ -178,6 +170,14 @@ export default function Alerts() {
           </>
         )}
       </div>
+      <label className="check-option">
+        <input
+          type="checkbox"
+          checked={historical}
+          onChange={(e) => setHistorical(e.target.checked)}
+        />
+        Historical exercises (separate from current alerts)
+      </label>
       <p className="muted">
         Thresholds are evaluated separately for each disease and location using counts attributed to
         report dates. They are review signals, not diagnoses. In-app alerts refresh every minute.
@@ -258,16 +258,21 @@ export default function Alerts() {
         />
         {rules.data &&
           (rules.data.length ? (
-            <div className="table-scroll">
+            <div
+              className="table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Alert evaluation evidence"
+            >
               <table>
                 <thead>
                   <tr>
-                    <th>Rule</th>
-                    <th>Scope</th>
-                    <th>Threshold</th>
-                    <th>Window</th>
-                    <th>Status</th>
-                    {writable && <th>Action</th>}
+                    <th scope="col">Rule</th>
+                    <th scope="col">Scope</th>
+                    <th scope="col">Threshold</th>
+                    <th scope="col">Window</th>
+                    <th scope="col">Status</th>
+                    {writable && <th scope="col">Action</th>}
                   </tr>
                 </thead>
                 <tbody>

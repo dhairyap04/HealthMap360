@@ -26,16 +26,16 @@ export default function DataHealth() {
             {health.data.conflicts} observations require conflict review and are excluded from
             totals.
           </p>
-          <section className="panel table-scroll">
+          <section className="panel table-scroll" tabIndex={0} aria-label="Source quality data">
             <table>
               <thead>
                 <tr>
-                  <th>Reporting area</th>
-                  <th>Disease</th>
-                  <th>Source</th>
-                  <th>Provenance</th>
-                  <th>Latest report</th>
-                  <th>Coverage</th>
+                  <th scope="col">Reporting area</th>
+                  <th scope="col">Disease</th>
+                  <th scope="col">Source</th>
+                  <th scope="col">Provenance</th>
+                  <th scope="col">Latest report</th>
+                  <th scope="col">Coverage</th>
                 </tr>
               </thead>
               <tbody>

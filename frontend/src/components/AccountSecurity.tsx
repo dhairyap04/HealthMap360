@@ -7,6 +7,7 @@ export default function AccountSecurity({ required = false }: { required?: boole
   const [secret, setSecret] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const Heading = required ? 'h1' : 'h2'
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setBusy(true)
@@ -46,7 +47,9 @@ export default function AccountSecurity({ required = false }: { required?: boole
     )
   return (
     <section className="panel">
-      <h2>{required ? 'Administrator authenticator required' : 'Enable an authenticator'}</h2>
+      <Heading>
+        {required ? 'Administrator authenticator required' : 'Enable an authenticator'}
+      </Heading>
       <p className="muted">
         {required
           ? 'Production administrator access is locked until enrollment is complete.'

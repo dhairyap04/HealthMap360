@@ -239,7 +239,7 @@ export default function MapPage() {
                     )}
               </MapContainer>
             </section>
-            <aside className="panel">
+            <aside className="panel" aria-label="Reporting areas">
               <p className="eyebrow">{scope.toUpperCase()} VIEW</p>
               <h2>
                 {locations.length} saved {locations.length === 1 ? 'location' : 'locations'}

@@ -1,6 +1,15 @@
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
+
+async function openWorkspacePage(page: Page, name: string) {
+  await expect(page.locator('.app-shell')).toBeVisible()
+  const link = page.getByRole('link', { name, exact: true })
+  if (!(await link.isVisible()))
+    await page.getByRole('button', { name: 'Menu', exact: true }).click()
+  await link.click()
+}
 
 test('complete public health workspace workflow', async ({ page }) => {
   const errors: string[] = []
@@ -13,7 +22,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'No observations in this view' })).toBeVisible()
-  await page.getByRole('link', { name: 'Reports & data' }).click()
+  await openWorkspacePage(page, 'Reports & data')
   await page
     .getByLabel('Upload outbreak CSV')
     .setInputFiles(path.resolve('public/sample-outbreaks.csv'))
@@ -27,7 +36,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export filtered CSV' }).click()
   expect((await download).suggestedFilename()).toBe('healthmap360-cases.csv')
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openWorkspacePage(page, 'Overview')
   await expect(
     page.locator('.stat').filter({ hasText: 'Reported cases' }).locator('strong'),
   ).toHaveText('93')
@@ -41,10 +50,10 @@ test('complete public health workspace workflow', async ({ page }) => {
     page.locator('.stat').filter({ hasText: 'Reported cases' }).locator('strong'),
   ).toHaveText('93')
   await page.screenshot({ path: 'test-results/dashboard-desktop.png', fullPage: true })
-  await page.getByRole('link', { name: 'Outbreak map' }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await expect(page.getByRole('heading', { name: '3 saved locations' })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(3)
-  await page.getByRole('link', { name: 'Resources', exact: true }).click()
+  await openWorkspacePage(page, 'Resources')
   await page.getByRole('button', { name: 'Add resource' }).click()
   await page.getByLabel('Resource type').fill('Protective masks')
   await page.getByLabel('Quantity', { exact: true }).fill('250')
@@ -58,7 +67,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Quantity', { exact: true }).fill('200')
   await page.getByRole('button', { name: 'Save resource' }).click()
   await expect(page.getByRole('cell', { name: '200', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByRole('button', { name: 'Add location' }).click()
   await page.route('**/api/locations/search?*', (route) =>
     route.fulfill({
@@ -84,7 +93,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Display name', { exact: true }).fill('Lethbridge')
   await page.getByRole('button', { name: 'Save location' }).click()
   await expect(page.getByRole('cell', { name: 'Lethbridge', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Outbreak map' }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await expect(page.getByRole('heading', { name: '4 saved locations' })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
   await expect(
@@ -108,7 +117,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '4 saved locations' })).toBeVisible()
   await expect(page.locator('.leaflet-overlay-pane path')).toHaveCount(4)
 
-  await page.getByRole('link', { name: 'Reports & data' }).click()
+  await openWorkspacePage(page, 'Reports & data')
   await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
   await page.getByLabel('Reported case count').fill('5')
   await page.getByRole('button', { name: 'Save changes' }).click()
@@ -117,7 +126,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete observation', exact: true }).click()
   await expect(page.locator('p.success')).toHaveText('Observation deleted.')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openWorkspacePage(page, 'Overview')
   await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
   await page.screenshot({ path: 'test-results/dashboard-mobile.png', fullPage: true })
   await expect
@@ -138,16 +147,16 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByRole('combobox', { name: 'Role for public_browser' }).selectOption('analyst')
   await expect(page.locator('p.success')).toContainText('Access updated')
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await page.getByLabel('Username', { exact: true }).fill('public_browser')
   await page.getByLabel('Password', { exact: true }).fill('public-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('link', { name: 'Reports & data' }).click()
+  await openWorkspacePage(page, 'Reports & data')
   await expect(page.getByRole('heading', { name: 'Import outbreak data' })).toBeVisible()
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByLabel('Current password', { exact: true }).fill('public-test-password')
   await page.getByLabel('New password', { exact: true }).fill('changed-test-password')
   await page.getByRole('button', { name: 'Change password', exact: true }).click()
@@ -156,7 +165,7 @@ test('complete public health workspace workflow', async ({ page }) => {
   await page.getByLabel('Password', { exact: true }).fill('changed-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openWorkspacePage(page, 'Overview')
   await expect(page.getByRole('heading', { name: 'Public health, in focus.' })).toBeVisible()
   expect(errors).toEqual([])
 })
@@ -225,7 +234,7 @@ test('styled filters support keyboard use and place search requires an explicit 
   await page.screenshot({ path: 'test-results/filter-menu-mobile.png', fullPage: false })
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByRole('button', { name: 'Add location' }).click()
   await expect(page.getByLabel('Latitude', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Longitude', { exact: true })).toHaveCount(0)
@@ -310,7 +319,7 @@ test('investigations, alerts and WHO feeds work through the product screens', as
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('link', { name: 'Investigations', exact: true }).click()
+  await openWorkspacePage(page, 'Investigations')
   await page.getByRole('button', { name: 'New investigation' }).click()
   await page.getByLabel('Investigation title').fill('Edmonton influenza response')
   await page.getByLabel('Disease', { exact: true }).fill('influenza')
@@ -351,7 +360,7 @@ test('investigations, alerts and WHO feeds work through the product screens', as
     page.getByText('Status changed from investigating to closed.', { exact: true }),
   ).toBeVisible()
   await page.screenshot({ path: 'test-results/investigation-detail.png', fullPage: true })
-  await page.getByRole('link', { name: 'Alerts', exact: true }).click()
+  await openWorkspacePage(page, 'Alerts')
   await page.getByRole('button', { name: 'New alert rule' }).click()
   await page.getByLabel('Rule name', { exact: true }).fill('Influenza review threshold')
   await page.getByLabel('Disease (optional)', { exact: true }).fill('influenza')
@@ -367,7 +376,7 @@ test('investigations, alerts and WHO feeds work through the product screens', as
   await page.getByRole('option', { name: 'Acknowledged', exact: true }).click()
   await page.getByRole('button', { name: 'Resolve', exact: true }).first().click()
   await expect(page.locator('p.success')).toHaveText('Alert resolved.')
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByRole('button', { name: 'Add location' }).click()
   await page.route('**/api/locations/search?*', (route) =>
     route.fulfill({
@@ -392,7 +401,7 @@ test('investigations, alerts and WHO feeds work through the product screens', as
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   await page.getByRole('button', { name: /Canada/ }).click()
   await page.getByRole('button', { name: 'Save location', exact: true }).click()
-  await page.getByRole('link', { name: 'Data feeds', exact: true }).click()
+  await openWorkspacePage(page, 'Data feeds')
   await page.getByRole('button', { name: 'Connect feed', exact: false }).click()
   await page.getByLabel('Feed name', { exact: true }).fill('WHO Canada weekly')
   await page.getByRole('combobox', { name: 'Source country', exact: true }).selectOption('CA')
@@ -418,7 +427,7 @@ test('investigations, alerts and WHO feeds work through the product screens', as
   await page.getByRole('button', { name: 'Pause', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/feed-history.png', fullPage: true })
-  await page.getByRole('link', { name: 'Reports & data', exact: true }).click()
+  await openWorkspacePage(page, 'Reports & data')
   const row = page
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: 'Canada', exact: true }) })
@@ -491,7 +500,7 @@ test('geography views isolate totals and show historical national boundaries', a
       })
     ).ok(),
   ).toBe(true)
-  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await expect(page.locator('.location-list')).not.toContainText('Canada')
   await expect(page.locator('.location-list')).not.toContainText('Alberta')
   await page.getByRole('button', { name: 'National', exact: true }).click()
@@ -520,7 +529,7 @@ test('geography views isolate totals and show historical national boundaries', a
   await page.getByRole('link', { name: 'Review reports', exact: false }).click()
   await expect(page.locator('tbody').first()).toContainText('Canada')
   await expect(page.locator('tbody').first()).not.toContainText('Edmonton')
-  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await page.getByRole('button', { name: 'Regional', exact: true }).click()
   await page.getByRole('combobox', { name: 'Reporting window', exact: true }).click()
   await page.getByRole('option', { name: 'Historical range', exact: true }).click()
@@ -540,7 +549,7 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('link', { name: 'Publication review', exact: true }).click()
+  await openWorkspacePage(page, 'Publication review')
   await page.getByRole('button', { name: 'Prepare publication', exact: true }).click()
   await page
     .getByRole('combobox', { name: 'Reporting area', exact: true })
@@ -592,7 +601,7 @@ test('publication review controls anonymous access and withdrawal', async ({ pag
   await page.getByLabel('Username', { exact: true }).fill('browser_admin')
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('link', { name: 'Publication review', exact: true }).click()
+  await openWorkspacePage(page, 'Publication review')
   await page.getByRole('button', { name: 'Withdraw publication', exact: true }).click()
   await expect(page.locator('p.success')).toContainText('Publication withdrawn')
   await page.getByRole('link', { name: /Open public reports/ }).click()
@@ -630,7 +639,7 @@ test('location deletion and reversible archive preserve reporting history', asyn
     },
   })
   expect(record.status()).toBe(201)
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   const unusedRow = page.getByRole('row').filter({ hasText: unused.name })
   await unusedRow.getByRole('button', { name: 'Delete', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -647,20 +656,20 @@ test('location deletion and reversible archive preserve reporting history', asyn
   await page.getByRole('button', { name: 'Archive instead', exact: true }).click()
   await page.getByRole('button', { name: 'Archive location', exact: true }).click()
   await expect(linkedRow).toHaveCount(0)
-  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await expect(page.locator('.location-list')).not.toContainText(linked.name)
-  await page.getByRole('link', { name: 'Reports & data', exact: true }).click()
+  await openWorkspacePage(page, 'Reports & data')
   await expect(page.getByRole('cell', { name: new RegExp(linked.name) })).toBeVisible()
   await expect(page.getByRole('cell', { name: new RegExp(linked.name) })).toContainText(
     'Archived location',
   )
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page.getByRole('checkbox', { name: 'Show archived locations' }).check()
   await expect(linkedRow).toContainText('Archived')
   await linkedRow.getByRole('button', { name: 'Restore', exact: true }).click()
   await page.getByRole('button', { name: 'Restore location', exact: true }).click()
   await expect(linkedRow).toContainText('Active')
-  await page.getByRole('link', { name: 'Outbreak map', exact: true }).click()
+  await openWorkspacePage(page, 'Outbreak map')
   await expect(page.locator('.location-list')).toContainText(linked.name)
   const reports = await page.request.get(`/api/cases?location_id=${linked.id}`, { headers })
   expect(JSON.stringify(await reports.json())).toContain('42')
@@ -716,7 +725,7 @@ test('regional weekly review compares evidence, qualifies rates and hands off to
   await expect(region).toContainText('+50 reported cases')
   await expect(region).toContainText('(+50%)')
   await expect(region).toContainText('Add a population, reference year')
-  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await openWorkspacePage(page, 'Settings')
   await page
     .getByRole('row')
     .filter({ hasText: area.name })

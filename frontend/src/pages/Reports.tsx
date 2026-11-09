@@ -151,10 +151,19 @@ export default function Reports() {
             </a>
           </div>
           <p className="muted">
-            One count per report date, location and disease. Zero is valid. Reporting periods are
-            daily unless specified as weekly. New locations need latitude and longitude. Exact
-            duplicates are skipped; conflicting records must be edited.
+            Import reported case counts by disease, place and reporting date. Exact duplicates are
+            skipped; conflicting records require an explicit correction.
           </p>
+          <details className="import-requirements">
+            <summary>CSV requirements and location setup</summary>
+            <p>
+              Use UTF-8 CSV with date, location, disease and case_count columns. Zero is valid.
+              Reports are daily unless a seven-day period is specified. New places in a CSV require
+              coordinates; save a place through Settings search first to reuse its name without
+              coordinates.
+            </p>
+            <Link to="/settings">Set up a reporting location →</Link>
+          </details>
           <FileUpload
             onReset={() => {
               setUpload(null)
@@ -208,19 +217,24 @@ export default function Reports() {
           {!records.data.items.length ? (
             <p className="empty">No observations match this view.</p>
           ) : (
-            <div className="table-scroll">
+            <div
+              className="table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Reported observations"
+            >
               <table>
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Location</th>
-                    <th>Disease</th>
-                    <th>Cases</th>
-                    <th>Period</th>
-                    <th>Investigation</th>
-                    <th>Assessment</th>
-                    <th>Source</th>
-                    {writable && <th>Actions</th>}
+                    <th scope="col">Date</th>
+                    <th scope="col">Location</th>
+                    <th scope="col">Disease</th>
+                    <th scope="col">Cases</th>
+                    <th scope="col">Period</th>
+                    <th scope="col">Investigation</th>
+                    <th scope="col">Assessment</th>
+                    <th scope="col">Source</th>
+                    {writable && <th scope="col">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -304,15 +318,15 @@ export default function Reports() {
           <LoadState loading={history.loading} error={history.error} retry={history.reload} />
           {history.data &&
             (history.data.length ? (
-              <div className="table-scroll">
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Import history">
                 <table>
                   <thead>
                     <tr>
-                      <th>File</th>
-                      <th>Saved</th>
-                      <th>Skipped</th>
-                      <th>Imported by</th>
-                      <th>Date</th>
+                      <th scope="col">File</th>
+                      <th scope="col">Saved</th>
+                      <th scope="col">Skipped</th>
+                      <th scope="col">Imported by</th>
+                      <th scope="col">Date</th>
                     </tr>
                   </thead>
                   <tbody>

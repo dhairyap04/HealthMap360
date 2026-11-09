@@ -87,7 +87,6 @@ export default function Settings() {
   const current = edit && edit !== 'new' ? edit : null
   return (
     <>
-      <AccountSecurity />
       <div className="page-heading">
         <div>
           <p className="eyebrow">WORKSPACE MANAGEMENT</p>
@@ -157,6 +156,14 @@ export default function Settings() {
           </form>
         </section>
       </div>
+      <details className="panel security-details">
+        <summary>
+          {user?.mfa_enabled
+            ? 'Authenticator enabled · account security'
+            : 'Set up an authenticator · account security'}
+        </summary>
+        <AccountSecurity />
+      </details>
       <section className="panel">
         <div className="panel-heading">
           <h2>Locations</h2>
@@ -186,16 +193,16 @@ export default function Settings() {
         <LoadState loading={locations.loading} error={locations.error} retry={locations.reload} />
         {locations.data &&
           (visibleLocations?.length ? (
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Saved locations">
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Map position</th>
-                    <th>Population</th>
-                    <th>Administrative level</th>
-                    {writable && <th>Actions</th>}
+                    <th scope="col">Name</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Map position</th>
+                    <th scope="col">Population</th>
+                    <th scope="col">Administrative level</th>
+                    {writable && <th scope="col">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -268,13 +275,13 @@ export default function Settings() {
           <h2>Account access</h2>
           <LoadState loading={users.loading} error={users.error} retry={users.reload} />
           {users.data && (
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Account access">
               <table>
                 <thead>
                   <tr>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Role</th>
+                    <th scope="col">Username</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -49,14 +49,14 @@ export default function DataPreview({
           </ul>
         </details>
       )}
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Import preview">
         <table>
           <thead>
             <tr>
               {parsed.fields.map((f) => (
                 <th key={f}>{f}</th>
               ))}
-              <th>Validation</th>
+              <th scope="col">Validation</th>
             </tr>
           </thead>
           <tbody>
